@@ -1,0 +1,66 @@
+{
+  "categories": {
+    "bakery": {
+      "base_qty": 1.535,
+      "elasticity": 1.215
+    },
+    "meat": {
+      "base_qty": 1.44,
+      "elasticity": 1.28
+    },
+    "produce": {
+      "base_qty": 1.549,
+      "elasticity": 1.491
+    },
+    "snacks": {
+      "base_qty": 1.45,
+      "elasticity": 1.651
+    },
+    "dairy": {
+      "base_qty": 1.472,
+      "elasticity": 1.371
+    },
+    "prepared": {
+      "base_qty": 1.531,
+      "elasticity": 0.98
+    },
+    "drinks": {
+      "base_qty": 1.48,
+      "elasticity": 1.959
+    }
+  },
+  "hourly_curve": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.017,
+    0.399,
+    1.527,
+    2.163,
+    2.545,
+    3.488,
+    3.213,
+    2.985,
+    3.455,
+    2.416,
+    1.247,
+    0.349,
+    0.159,
+    0.036,
+    0.0,
+    0.0,
+    0.0
+  ],
+  "sources": {
+    "elasticity": "synthetic:transactions.csv",
+    "hourly_curve": "real:UCI Online Retail"
+  },
+  "uci_qty": {
+    "mean": 10.297,
+    "std": 38.101
+  }
+}

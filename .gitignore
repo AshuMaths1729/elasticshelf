@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+
+# Secrets / local config
+.env
+
+# Large re-downloadable artifacts (scripts fetch these)
+elasticshelf/data/uci_online_retail.xlsx
+elasticshelf/data/_uci_download.tmp
+
+# macOS
+.DS_Store
+
+# Logs
+*.log

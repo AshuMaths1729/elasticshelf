@@ -1,0 +1,50 @@
+[
+  {
+    "query": "salmon",
+    "product_name": "Parmentier de saumon \ud83d\udc1f",
+    "brands": "Maison Briau",
+    "code": "3571492670004",
+    "image_url": "https://images.openfoodfacts.org/images/products/357/149/267/0004/front_fr.92.400.jpg",
+    "categories": "Plats pr\u00e9par\u00e9s r\u00e9frig\u00e9r\u00e9s, brandade aux pommes de terre, Parmentiers de saumon, en:Parmentiers"
+  },
+  {
+    "query": "salmon",
+    "product_name": "Salmon ahumado",
+    "brands": "LIDL",
+    "code": "4056489530268",
+    "image_url": "https://images.openfoodfacts.org/images/products/405/648/953/0268/front_de.30.400.jpg",
+    "categories": "Salmones ahumados"
+  },
+  {
+    "query": "salmon",
+    "product_name": "Saumon aux \u00e9pices tandoori, riz noir et petits l\u00e9gumes",
+    "brands": "Picard",
+    "code": "3270160860685",
+    "image_url": "https://images.openfoodfacts.org/images/products/327/016/086/0685/front_fr.101.400.jpg",
+    "categories": "Plats \u00e0 base de riz, Plats pr\u00e9par\u00e9s surgel\u00e9s, Plats au saumon"
+  },
+  {
+    "query": "salmon",
+    "product_name": "Salmon",
+    "brands": "Ocean kiss",
+    "code": "3770010799153",
+    "image_url": "https://images.openfoodfacts.org/images/products/377/001/079/9153/front_it.24.400.jpg",
+    "categories": "Frutti di mare, Sostituti della carne"
+  },
+  {
+    "query": "salmon",
+    "product_name": "Salm\u00f3n al natural",
+    "brands": "MERCADONA",
+    "code": "8480000188175",
+    "image_url": "https://images.openfoodfacts.org/images/products/848/000/018/8175/front_en.105.400.jpg",
+    "categories": "Salmon enlatado"
+  },
+  {
+    "query": "salmon",
+    "product_name": "Salmon ahumado en lonchas",
+    "brands": "nautica",
+    "code": "20177089",
+    "image_url": "https://images.openfoodfacts.org/images/products/000/002/017/7089/front_en.7.400.jpg",
+    "categories": "Salmones ahumados"
+  }
+]

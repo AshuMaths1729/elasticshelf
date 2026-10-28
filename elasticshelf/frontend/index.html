@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ElasticShelf — Live Store Simulation</title>
+<link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">Elastic<span>Shelf</span></div>
+  <div class="store-tag" id="storeTag">ST-4092</div>
+  <div class="clock">SIM <strong id="clock">—</strong> · tick <strong id="tick">0</strong></div>
+  <div class="badge" id="engineBadge">engine: …</div>
+  <div class="badge" id="liveBadge">paused</div>
+  <div class="controls">
+    <button class="primary" id="btnToggle">Start</button>
+    <button id="btnStep">Step +1h</button>
+    <button id="btnPrice">Reprice now</button>
+    <button id="btnReset">Reset</button>
+    <label>speed
+      <select id="speed">
+        <option value="0.5">0.5s</option>
+        <option value="2" selected>2s</option>
+        <option value="5">5s</option>
+      </select>
+    </label>
+  </div>
+</header>
+
+<div class="metrics">
+  <div class="metric"><div class="k">Revenue</div><div class="v good" id="mRev">$0.00</div></div>
+  <div class="metric"><div class="k">Units sold</div><div class="v" id="mSold">0</div></div>
+  <div class="metric"><div class="k">Units wasted</div><div class="v bad" id="mWaste">0</div></div>
+  <div class="metric"><div class="k">Active SKUs</div><div class="v" id="mSkus">0</div></div>
+  <div class="metric"><div class="k">Connection</div><div class="v" id="conn">…</div></div>
+</div>
+
+<main class="layout">
+  <section class="panel">
+    <h2>Shelf Edge — Electronic Shelf Labels (live)</h2>
+    <div class="shelf-grid" id="shelf"><div class="empty">Connecting to store stream…</div></div>
+  </section>
+
+  <div>
+    <section class="panel">
+      <h2>Store Context</h2>
+      <div class="ctx-grid">
+        <div class="cell"><div class="k">Footfall</div><div class="v" id="cFoot">—</div></div>
+        <div class="cell"><div class="k">Temp</div><div class="v" id="cTemp">—</div></div>
+        <div class="cell"><div class="k">Rain (mm)</div><div class="v" id="cRain">—</div></div>
+        <div class="cell"><div class="k">Demand mod</div><div class="v" id="cMod">—</div></div>
+      </div>
+      <div class="event-banner" id="cEvent" hidden></div>
+    </section>
+
+    <section class="panel">
+      <h2>POS — Live Checkouts</h2>
+      <div class="feed" id="pos"><div class="empty">No sales yet — start the simulation.</div></div>
+    </section>
+
+    <section class="panel">
+      <h2>ESL Push Audit</h2>
+      <div class="audit" id="audit"><div class="empty">No price pushes yet.</div></div>
+    </section>
+  </div>
+</main>
+
+<footer>ElasticShelf MVP · FastAPI + WebSocket · <span id="footEngine">engine: …</span></footer>
+<script src="/static/app.js"></script>
+</body>
+</html>

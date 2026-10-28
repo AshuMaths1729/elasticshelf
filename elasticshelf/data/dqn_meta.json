@@ -1,0 +1,23 @@
+{
+  "episodes": 2500,
+  "seed": 1,
+  "gamma": 0.95,
+  "eval_dqn": {
+    "reward": 10.73,
+    "sellout_rate": 0.64,
+    "waste_rate": 0.07,
+    "avg_deepest_discount": 0.19
+  },
+  "eval_rule": {
+    "reward": 6.34,
+    "sellout_rate": 0.82,
+    "waste_rate": 0.05,
+    "avg_deepest_discount": 0.26
+  },
+  "actions": [
+    -0.1,
+    -0.05,
+    0.0,
+    0.05
+  ]
+}

@@ -1,0 +1,242 @@
+[
+  {
+    "sku": "ORG-CHK-01",
+    "name": "Organic Chicken Breast",
+    "category": "meat",
+    "quantity_on_shelf": 45,
+    "base_price": 12.99,
+    "current_price": 12.99,
+    "cost_basis": 8.5,
+    "expiration_timestamp": "2026-10-30T22:10:40.664927+00:00"
+  },
+  {
+    "sku": "GRB-BEF-02",
+    "name": "Ground Beef 500g",
+    "category": "meat",
+    "quantity_on_shelf": 38,
+    "base_price": 9.49,
+    "current_price": 9.49,
+    "cost_basis": 6.1,
+    "expiration_timestamp": "2026-10-29T22:10:40.664927+00:00"
+  },
+  {
+    "sku": "SLM-FIL-03",
+    "name": "Salmon Fillet",
+    "category": "meat",
+    "quantity_on_shelf": 22,
+    "base_price": 15.99,
+    "current_price": 15.99,
+    "cost_basis": 10.2,
+    "expiration_timestamp": "2026-10-29T10:10:40.664927+00:00"
+  },
+  {
+    "sku": "BRR-MIX-04",
+    "name": "Mixed Berries 300g",
+    "category": "produce",
+    "quantity_on_shelf": 30,
+    "base_price": 6.49,
+    "current_price": 6.49,
+    "cost_basis": 3.2,
+    "expiration_timestamp": "2026-10-29T04:10:40.664927+00:00"
+  },
+  {
+    "sku": "AVO-HAS-05",
+    "name": "Hass Avocado (4pk)",
+    "category": "produce",
+    "quantity_on_shelf": 55,
+    "base_price": 5.99,
+    "current_price": 5.99,
+    "cost_basis": 2.9,
+    "expiration_timestamp": "2026-10-30T10:10:40.664927+00:00"
+  },
+  {
+    "sku": "SPN-BAB-06",
+    "name": "Baby Spinach 200g",
+    "category": "produce",
+    "quantity_on_shelf": 40,
+    "base_price": 3.99,
+    "current_price": 3.99,
+    "cost_basis": 1.8,
+    "expiration_timestamp": "2026-10-29T16:10:40.664927+00:00"
+  },
+  {
+    "sku": "MLK-OAT-07",
+    "name": "Oat Milk 1L",
+    "category": "dairy",
+    "quantity_on_shelf": 52,
+    "base_price": 4.29,
+    "current_price": 4.29,
+    "cost_basis": 2.4,
+    "expiration_timestamp": "2026-10-31T22:10:40.664927+00:00"
+  },
+  {
+    "sku": "YGR-GRK-08",
+    "name": "Greek Yogurt 500g",
+    "category": "dairy",
+    "quantity_on_shelf": 44,
+    "base_price": 5.49,
+    "current_price": 5.49,
+    "cost_basis": 2.9,
+    "expiration_timestamp": "2026-10-31T10:10:40.664927+00:00"
+  },
+  {
+    "sku": "CHS-CHD-09",
+    "name": "Cheddar Block 400g",
+    "category": "dairy",
+    "quantity_on_shelf": 33,
+    "base_price": 7.29,
+    "current_price": 7.29,
+    "cost_basis": 4.1,
+    "expiration_timestamp": "2026-11-01T12:10:40.664927+00:00"
+  },
+  {
+    "sku": "BRD-SRD-10",
+    "name": "Sourdough Loaf",
+    "category": "bakery",
+    "quantity_on_shelf": 28,
+    "base_price": 4.99,
+    "current_price": 4.99,
+    "cost_basis": 2.1,
+    "expiration_timestamp": "2026-10-28T22:10:40.664927+00:00"
+  },
+  {
+    "sku": "CRS-BTR-11",
+    "name": "Butter Croissant (4pk)",
+    "category": "bakery",
+    "quantity_on_shelf": 24,
+    "base_price": 5.49,
+    "current_price": 5.49,
+    "cost_basis": 2.3,
+    "expiration_timestamp": "2026-10-28T18:10:40.664927+00:00"
+  },
+  {
+    "sku": "BAG-BLU-12",
+    "name": "Blueberry Bagels (6pk)",
+    "category": "bakery",
+    "quantity_on_shelf": 26,
+    "base_price": 4.79,
+    "current_price": 4.79,
+    "cost_basis": 2.0,
+    "expiration_timestamp": "2026-10-29T14:10:40.664927+00:00"
+  },
+  {
+    "sku": "SUS-SET-13",
+    "name": "Sushi Set (12pc)",
+    "category": "prepared",
+    "quantity_on_shelf": 18,
+    "base_price": 11.99,
+    "current_price": 11.99,
+    "cost_basis": 6.5,
+    "expiration_timestamp": "2026-10-28T12:10:40.664927+00:00"
+  },
+  {
+    "sku": "SLD-CSR-14",
+    "name": "Caesar Salad Bowl",
+    "category": "prepared",
+    "quantity_on_shelf": 20,
+    "base_price": 8.49,
+    "current_price": 8.49,
+    "cost_basis": 4.2,
+    "expiration_timestamp": "2026-10-28T16:10:40.664927+00:00"
+  },
+  {
+    "sku": "PST-PRM-15",
+    "name": "Pasta Primavera Tray",
+    "category": "prepared",
+    "quantity_on_shelf": 16,
+    "base_price": 9.99,
+    "current_price": 9.99,
+    "cost_basis": 5.1,
+    "expiration_timestamp": "2026-10-29T00:10:40.664927+00:00"
+  },
+  {
+    "sku": "OJ-FRS-16",
+    "name": "Fresh Orange Juice 1L",
+    "category": "drinks",
+    "quantity_on_shelf": 36,
+    "base_price": 5.99,
+    "current_price": 5.99,
+    "cost_basis": 2.8,
+    "expiration_timestamp": "2026-10-30T02:10:40.664927+00:00"
+  },
+  {
+    "sku": "KMB-GNG-17",
+    "name": "Ginger Kombucha 750ml",
+    "category": "drinks",
+    "quantity_on_shelf": 30,
+    "base_price": 4.49,
+    "current_price": 4.49,
+    "cost_basis": 2.1,
+    "expiration_timestamp": "2026-10-31T16:10:40.664927+00:00"
+  },
+  {
+    "sku": "CHP-KE-18",
+    "name": "Kale Chips 120g",
+    "category": "snacks",
+    "quantity_on_shelf": 48,
+    "base_price": 3.79,
+    "current_price": 3.79,
+    "cost_basis": 1.6,
+    "expiration_timestamp": "2026-11-01T02:10:40.664927+00:00"
+  },
+  {
+    "sku": "HUM-CLS-19",
+    "name": "Classic Hummus 300g",
+    "category": "snacks",
+    "quantity_on_shelf": 42,
+    "base_price": 4.19,
+    "current_price": 4.19,
+    "cost_basis": 1.9,
+    "expiration_timestamp": "2026-10-30T16:10:40.664927+00:00"
+  },
+  {
+    "sku": "EGG-FRE-20",
+    "name": "Free-Range Eggs (12)",
+    "category": "dairy",
+    "quantity_on_shelf": 50,
+    "base_price": 6.99,
+    "current_price": 6.99,
+    "cost_basis": 3.8,
+    "expiration_timestamp": "2026-11-01T06:10:40.664927+00:00"
+  },
+  {
+    "sku": "TOM-VIN-21",
+    "name": "Vine Tomatoes 500g",
+    "category": "produce",
+    "quantity_on_shelf": 58,
+    "base_price": 3.49,
+    "current_price": 3.49,
+    "cost_basis": 1.5,
+    "expiration_timestamp": "2026-10-29T20:10:40.664927+00:00"
+  },
+  {
+    "sku": "MUS-SHI-22",
+    "name": "Shiitake Mushrooms 200g",
+    "category": "produce",
+    "quantity_on_shelf": 25,
+    "base_price": 4.99,
+    "current_price": 4.99,
+    "cost_basis": 2.4,
+    "expiration_timestamp": "2026-10-29T12:10:40.664927+00:00"
+  },
+  {
+    "sku": "PRW-GRL-23",
+    "name": "Garlic Prawns 300g",
+    "category": "meat",
+    "quantity_on_shelf": 15,
+    "base_price": 13.49,
+    "current_price": 13.49,
+    "cost_basis": 8.8,
+    "expiration_timestamp": "2026-10-29T02:10:40.664927+00:00"
+  },
+  {
+    "sku": "CAK-CRT-24",
+    "name": "Carrot Cake Slice",
+    "category": "bakery",
+    "quantity_on_shelf": 22,
+    "base_price": 3.99,
+    "current_price": 3.99,
+    "cost_basis": 1.7,
+    "expiration_timestamp": "2026-10-28T14:10:40.664927+00:00"
+  }
+]
