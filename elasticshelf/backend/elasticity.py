@@ -349,6 +349,8 @@ class ElasticityEngine:
         - Expired stock (hours_to_expiry <= 0) is never repriced.
         - Markdown-only: prices never increase; any +5% a policy picks is
           served as hold. Shelf prices only ever go down or stay put.
+        - Margin floor: never price below cost + 5% (clearance may not
+          give the stock away at cost).
         """
         if hours_to_expiry <= 0:
             return round(float(current_price), 2), 2, "expired-hold"
@@ -391,9 +393,9 @@ class ElasticityEngine:
             action = min(action, 0)
         elif hours_to_expiry <= 48 and stock >= 30:
             action = min(action, 1)
-        # Cent-safe bounds: never below cost, never above 1.5x base, and
+        # Cent-safe bounds: never below cost+5%, never above 1.5x base, and
         # markdown-only — never above the current price.
-        floor = math.ceil(cost_basis * 100 - 1e-9) / 100
+        floor = math.ceil(cost_basis * 1.05 * 100 - 1e-9) / 100
         cap = math.floor(base_price * 1.5 * 100 + 1e-9) / 100
         new_price = round(min(cap, current_price, max(floor, current_price * (1 + ACTIONS[action]))), 2)
         if new_price == current_price and action != 2:

@@ -144,38 +144,39 @@ Latest eval (`data/ppo_meta.json`, one reproducible protocol —
 (margin) maximised subject to aggressively minimised waste):
 
 All rows below are **served** through `ElasticityEngine.decide` (same
-markdown-only + expiry-ladder invariants for every policy — the earlier
-draft compared served PPO against *raw* DQN and overstated the gap):
+markdown-only, expiry-ladder, cost+5% margin-floor invariants for every
+policy). From `scripts/evaluate_policies.py` (`data/policy_eval.json`,
+5 seeds × 100 episodes per seed, unit-weighted waste = actual leftover
+units / initial units):
 
 | Policy (served) | Revenue | Profit (margin) | Reward | Sellout | **Units wasted** |
 |---|---|---|---|---|---|
-| **PPO + ladder** | **29.37** | **9.58** | +8.48 | 87% | **3%** |
-| DQN + ladder | 25.75 | 8.93 | +7.74 | 86% | 4% |
-| Tuned rule + ladder | 24.30 | 7.29 | +6.56 | 88% | 3% |
-| MPC + ladder | 21.45 | 3.80 | +2.85 | 91% | 3% |
-| PPO (raw, no ladder) | 25.91 | 10.55 | +7.83 | 69% | 9% |
-| DQN (raw, no ladder) | 29.44 | **14.15** | +8.77 | 55% | 14% |
+| **PPO + ladder** | **26.84** | **8.56** | +7.30 | 85% | 3.3% |
+| DQN + ladder | 25.13 | 8.30 | +7.09 | 84% | 3.3% |
+| Rule + ladder | 24.30 | 6.47 | +5.60 | 87% | **2.6%** |
+| Tuned rule + ladder | 23.74 | 6.84 | +5.69 | 84% | 3.4% |
+| MPC + ladder | 21.68 | 3.79 | +2.42 | 87% | 3.3% |
 
-Unit-weighted audit (actual units, not per-episode means): served PPO
-wastes **209 / 7,379 units = 2.8%**. What the waste sweep found: raising
-the terminal waste penalty alone (×8) backfired (14% waste); dense
-expiry shaping (0.5) reached 4% waste but collapsed profit (margin ~1);
-`waste×16 + shaping 0.1` raw PPO got 5% waste at revenue 29.11. The
-ladder gets every policy to the ~3% floor — PPO's edge is keeping
-revenue/profit highest while there.
+On **adversarial short-dated** episodes (30–60 units, 6–48h to expiry)
+every policy wastes **37–39%** — demand physics dominates (max sell
+rate at the floor vs stock), MPC marginally best (36.9%). No pricing
+policy can clear stock that cannot be sold in time; that waste must be
+prevented at ordering/stocking, not pricing.
 
-**Reward-hacking audit (read before trusting "0 waste" live):** in the
-live simulator the served policy sold all 817 catalog units with
-`units_wasted: 0` across 5 seeds, while forced-hold wasted 17.2% —
-accounting checks out (`sold + wasted + left = initial`). *But* the
-live demand model makes clearing far easier than real retail: demand is
-per-SKU independent (no shared footfall/budget), a 40% discount roughly
-triples per-SKU demand (`2.2 + 9·rel`, +40% under 24h), the ladder
-compounds −10%/tick so 21% of env steps sit at the cost floor, and
-`DemandEnv` episodes draw stock-feasible expiries. Zero live waste is
-therefore a simulator result, not a forecast — validate on real POS
-demand before claiming it. Details: `audit_*` fields in
-`data/ppo_meta.json`.
+**Realism fixes (after a reward-hacking audit found live "0 waste" was
+a simulator artifact):** (1) the live simulator now draws demand from
+ONE shared footfall pool (`HOURLY_SHOPPER_UNITS`, allocated across SKUs
+by fitted category elasticity ~1–2) — discounts reallocate demand, they
+no longer create shoppers per-SKU; (2) markdowns are spaced (one per
+SKU per 6 ticks, final-6h excepted) and the engine floor is cost + 5%,
+so hourly repricing cannot compound straight to bare cost; (3)
+evaluation reports unit-weighted waste across seeds plus the
+adversarial scenario above. Under the fixed simulator the same live
+catalog run wastes **20.5%** served vs **29.7%** at forced-hold
+(5 seeds; revenue $3,517 vs $3,797 — waste reduction still costs
+margin; anyone claiming both free should be distrusted). Earlier
+"0 units wasted live" numbers were produced by the old per-SKU
+demand model and are retracted.
 
 **Business invariants (all policies, enforced in `ElasticityEngine.decide`):**
 prices are *markdown-only* — the +5% action is masked for PPO in training

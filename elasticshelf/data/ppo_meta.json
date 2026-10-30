@@ -103,6 +103,7 @@
   "audit_corrections": [
     "Earlier table compared SERVED PPO+ladder vs RAW DQN (waste 14%): apples-to-oranges. Served DQN (same ladder/invariants) wastes 4%. PPO still leads served policies on revenue/margin, waste tied at floor.",
     "Zero live waste is accounting-correct for this catalog (sold+wasted+left=817 across 5 seeds; forced-hold wastes 17.2%), but the live simulator's per-SKU independent demand and discount elasticity (lam ~ 2.2 + 9*rel, +40% under 24h) make clearing far easier than real retail; prices also compound -10%/tick to the cost floor inside 24h (21% of env steps at floor). Treat live 0-waste as a simulator artifact until validated on real POS demand.",
-    "DemandEnv episodes draw stock-feasible expiries (hours ~ stock x 0.8-2.5), so doomed short-dated overstock is underrepresented."
+    "DemandEnv episodes draw stock-feasible expiries (hours ~ stock x 0.8-2.5), so doomed short-dated overstock is underrepresented.",
+    "ADDRESSED: live simulator now uses one shared footfall pool with fitted elasticity, markdowns are spaced 1-per-6-ticks, engine floor is cost+5%, and scripts/evaluate_policies.py + data/policy_eval.json report multi-seed unit-weighted waste incl. adversarial short-dated episodes (all policies waste 37-39% there). Post-fix live catalog: served waste 20.5% vs forced-hold 29.7% (5 seeds). Superseded eval numbers above (pre-margin-floor) — use data/policy_eval.json as current."
   ]
 }

@@ -30,11 +30,15 @@ SHAPING = 0.0  # dense expiry-risk coefficient (0 = legacy behavior)
 class DemandEnv:
     def __init__(self, demand: dict, seed: int = 0,
                  waste_weight: float = WASTE_WEIGHT,
-                 shaping: float = SHAPING):
+                 shaping: float = SHAPING,
+                 short_dated: bool = False):
         self.demand = demand
         self.rng = np.random.default_rng(seed)
         self.waste_weight = waste_weight
         self.shaping = shaping
+        # Adversarial mode: heavy stock with very short life (doomed unless
+        # cleared fast) — underrepresented in the default feasible draws.
+        self.short_dated = short_dated
         self.last_margin = 0.0
         self.reset()
 
@@ -52,6 +56,9 @@ class DemandEnv:
         self.stock = int(self.rng.integers(10, 61))
         # Feasible cover: hours scale with stock (no doomed 55-units-in-8h draws).
         self.hours = float(np.clip(self.stock * self.rng.uniform(0.8, 2.5), 12, 120))
+        if self.short_dated:
+            self.stock = int(self.rng.integers(30, 61))
+            self.hours = float(self.rng.uniform(6, 48))
         self.hour = int(self.rng.integers(0, 24))
         self.dem = float(self.rng.uniform(-0.5, 0.5))
         self.last_margin = 0.0
@@ -89,9 +96,11 @@ class DemandEnv:
 def rollout_stats(env: DemandEnv, acts: Callable, n: int = 200) -> Dict:
     """Roll out `acts(state, env) -> action` n times; summarize margin/waste."""
     totals, margins, revenues, sellouts, wastes, min_ratios = [], [], [], [], [], []
+    unit_start = unit_left = 0
     for _ in range(n):
         s = env.reset()
         start_stock = env.stock
+        unit_start += start_stock
         min_ratio, done, total, margin, revenue = 1.0, False, 0.0, 0.0, 0.0
         while not done:
             a = acts(s, env)
@@ -103,6 +112,7 @@ def rollout_stats(env: DemandEnv, acts: Callable, n: int = 200) -> Dict:
         totals.append(total)
         margins.append(margin)
         revenues.append(revenue)
+        unit_left += env.stock
         sellouts.append(1.0 if env.stock <= 0 else 0.0)
         wastes.append(env.stock / max(start_stock, 1))
         min_ratios.append(min_ratio)
@@ -111,4 +121,5 @@ def rollout_stats(env: DemandEnv, acts: Callable, n: int = 200) -> Dict:
             "revenue": round(float(np.mean(revenues)), 2),
             "sellout_rate": round(float(np.mean(sellouts)), 2),
             "waste_rate": round(float(np.mean(wastes)), 2),
+            "waste_units_rate": round(unit_left / max(unit_start, 1), 3),
             "avg_deepest_discount": round(1 - float(np.mean(min_ratios)), 2)}

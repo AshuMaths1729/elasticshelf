@@ -13,7 +13,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 
 from .context_engine import ContextEngine
-from .elasticity import ElasticityEngine
+from .elasticity import ElasticityEngine, demand_for_category
 from .esl_bridge import ESLBridge
 from .models import ContextSnapshot, InventoryItem
 from .store import Store
@@ -29,6 +29,11 @@ EVENTS = [
 DAY_CURVE = [0.15, 0.1, 0.08, 0.08, 0.12, 0.3, 0.6, 0.9, 1.0, 1.0,
              0.95, 1.1, 1.25, 1.1, 0.95, 0.9, 1.0, 1.2, 1.35, 1.15,
              0.9, 0.65, 0.4, 0.25]
+
+# Shared shopper pool: expected total units demanded per sim-hour at
+# footfall 1.0, shared across ALL SKUs (one store, one footfall — a
+# discount on one SKU reallocates demand, it does not create shoppers).
+HOURLY_SHOPPER_UNITS = 9.0
 
 
 class Simulator:
@@ -97,6 +102,18 @@ class Simulator:
             base *= 0.75
         return round(base * self.rng.uniform(0.9, 1.1), 3)
 
+    def _poisson(self, mu: float) -> int:
+        """Knuth Poisson draw on the sim RNG (mu stays small here)."""
+        if mu <= 0:
+            return 0
+        import math as _math
+        threshold = _math.exp(-mu)
+        k, p = 0, 1.0
+        while p > threshold:
+            k += 1
+            p *= self.rng.random()
+        return k - 1
+
     def tick(self) -> Dict:
         self.sim_time += timedelta(hours=self.hours_per_tick)
         self.tick_count += 1
@@ -104,7 +121,10 @@ class Simulator:
         ff = self.footfall()
         event = self.current_event()
 
-        sales: List[Dict] = []
+        # Shared demand pool (realism fix): total units this hour come from
+        # ONE footfall-driven pool; SKUs compete for it by fitted category
+        # elasticity (~1-2), not an independent 2.2+9*rel firehose each.
+        eligible, weights = [], []
         for item in self.store.all():
             if item.quantity_on_shelf <= 0:
                 continue
@@ -112,14 +132,36 @@ class Simulator:
             if hrs_left <= 0:
                 self.store.record_waste(item.sku, item.quantity_on_shelf)
                 continue
-            # Elastic demand (signed): discounts lift demand, hikes cut it.
-            rel = (item.base_price - item.current_price) / item.base_price
-            lam = ff * max(0.2, 2.2 + rel * 9.0) * (1.4 if hrs_left < 24 else 1.0)
-            qty = min(item.quantity_on_shelf, int(self.rng.expovariate(1.0 / max(lam, 0.05)) / 2))
-            if qty > 0:
-                total = self.store.record_sale(item.sku, qty)
-                sales.append({"sku": item.sku, "name": item.name, "qty": qty,
-                              "unit_price": item.current_price, "total": total})
+            rel = max(-0.5, min(0.6, (item.base_price - item.current_price) / item.base_price))
+            base_qty, elast = demand_for_category(item.category)
+            w = base_qty * max(0.05, 1.0 + elast * rel) * (1.4 if hrs_left < 24 else 1.0)
+            eligible.append(item)
+            weights.append(w)
+
+        sales: List[Dict] = []
+        if eligible:
+            # Store-level lift from the average discount (bounded): price
+            # cuts grow the total basket modestly, never multiplicatively.
+            tot_w = sum(weights)
+            avg_lift = sum(w * max(-0.5, min(0.6, (i.base_price - i.current_price) / i.base_price))
+                           for i, w in zip(eligible, weights)) / max(tot_w, 1e-9)
+            mu = ff * HOURLY_SHOPPER_UNITS * max(0.7, min(1.3, 1.0 + avg_lift))
+            pool = self._poisson(mu * self.hours_per_tick)
+            qty_by_sku: Dict[str, int] = {}
+            for _ in range(pool):
+                live = [(i, w) for i, w in zip(eligible, weights)
+                        if qty_by_sku.get(i.sku, 0) < i.quantity_on_shelf]
+                if not live:
+                    break
+                pick = self.rng.choices([i for i, _ in live],
+                                        weights=[w for _, w in live])[0]
+                qty_by_sku[pick.sku] = qty_by_sku.get(pick.sku, 0) + 1
+            for item in eligible:
+                qty = qty_by_sku.get(item.sku, 0)
+                if qty > 0:
+                    total = self.store.record_sale(item.sku, qty)
+                    sales.append({"sku": item.sku, "name": item.name, "qty": qty,
+                                  "unit_price": item.current_price, "total": total})
 
         checkouts = self._group_checkouts(sales)
         self.pos_feed.extend(checkouts)
@@ -174,11 +216,12 @@ class Simulator:
                 item.quantity_on_shelf, hrs_left, mod,
                 category=item.category, footfall=ff, hour=self.sim_time.hour)
             item.last_reasoning = reasoning
-            # Cooldown: at most one markdown per 3 ticks unless expiring <24h.
-            # Prices never increase (markdown-only, enforced in the engine),
-            # so there is no margin-recovery exception here.
-            cooled = (self.tick_count - self._last_push_tick.get(item.sku, -99)) < 3
-            if cooled and new_price < item.current_price and hrs_left >= 24:
+            # Markdown spacing (realism fix): at most one markdown per SKU
+            # per 6 ticks, so hourly repricing cannot compound -10% steps
+            # straight to the floor; only the final 6h may re-markdown
+            # every tick for last-chance clearance.
+            cooled = (self.tick_count - self._last_push_tick.get(item.sku, -99)) < 6
+            if cooled and new_price < item.current_price and hrs_left > 6:
                 new_price, action = item.current_price, 2
             if new_price != item.current_price:
                 self._last_push_tick[item.sku] = self.tick_count
