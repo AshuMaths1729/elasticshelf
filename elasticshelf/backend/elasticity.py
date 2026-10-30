@@ -342,7 +342,8 @@ class ElasticityEngine:
                stock: int, hours_to_expiry: float, demand_mod: float,
                category: Optional[str] = None, footfall: Optional[float] = None,
                hour: Optional[int] = None, base_qty: Optional[float] = None,
-               elasticity: Optional[float] = None) -> Tuple[float, int, str]:
+               elasticity: Optional[float] = None,
+               waste_ladder: str = "standard") -> Tuple[float, int, str]:
         """Returns (new_price, action_idx, policy_note). Never prices below cost.
 
         Business invariants (enforced here for every policy, incl. DQN/PPO):
@@ -386,12 +387,21 @@ class ElasticityEngine:
             action = rule_policy(price_ratio, stock, hours_to_expiry, demand_mod)
             note = "ppo-rules-fallback" if self._policy == "ppo" else "rule-policy"
         # Waste-minimisation ladder (all policies): inside 24h-to-expiry the
-        # served action is at least -10%; inside 48h with heavy stock at
-        # least -5%. A policy may markdown deeper, never shallower. Tuned on
-        # DemandEnv rollouts (see README): waste 9% -> 3% at equal revenue.
-        if hours_to_expiry <= 24:
+        # served action is at least -10%; inside 48h with stock >= 30 at
+        # least -5%. A policy may markdown deeper, never shallower.
+        # The live simulator passes waste_ladder="early" (36h / 96h &
+        # stock>=25): selected on shared-pool rollouts (units wasted
+        # 22.7% -> 18.2%), and safe there because the simulator spaces
+        # markdowns to one per 6 ticks. In this hourly-step env the same
+        # early ladder fire-sales (revenue -22% for -0.9pt waste), so it
+        # is NOT the default here.
+        if waste_ladder == "early":
+            deep_h, wide_h, wide_stock = 36.0, 96.0, 25
+        else:
+            deep_h, wide_h, wide_stock = 24.0, 48.0, 30
+        if hours_to_expiry <= deep_h:
             action = min(action, 0)
-        elif hours_to_expiry <= 48 and stock >= 30:
+        elif hours_to_expiry <= wide_h and stock >= wide_stock:
             action = min(action, 1)
         # Cent-safe bounds: never below cost+5%, never above 1.5x base, and
         # markdown-only — never above the current price.

@@ -2,7 +2,7 @@
   "algorithm": "ppo",
   "markdown_only": true,
   "expired_never_repriced": true,
-  "expiry_ladder": "<=24h: at least -10%; <=48h & stock>=30: at least -5%",
+  "expiry_ladder": "standard (engine default): <=24h at least -10%; <=48h & stock>=30 at least -5%. early (live simulator only, via waste_ladder='early'): <=36h at least -10%; <=96h & stock>=25 at least -5%",
   "iterations": 300,
   "rollout_steps": 2048,
   "seed": 1,
@@ -104,6 +104,22 @@
     "Earlier table compared SERVED PPO+ladder vs RAW DQN (waste 14%): apples-to-oranges. Served DQN (same ladder/invariants) wastes 4%. PPO still leads served policies on revenue/margin, waste tied at floor.",
     "Zero live waste is accounting-correct for this catalog (sold+wasted+left=817 across 5 seeds; forced-hold wastes 17.2%), but the live simulator's per-SKU independent demand and discount elasticity (lam ~ 2.2 + 9*rel, +40% under 24h) make clearing far easier than real retail; prices also compound -10%/tick to the cost floor inside 24h (21% of env steps at floor). Treat live 0-waste as a simulator artifact until validated on real POS demand.",
     "DemandEnv episodes draw stock-feasible expiries (hours ~ stock x 0.8-2.5), so doomed short-dated overstock is underrepresented.",
-    "ADDRESSED: live simulator now uses one shared footfall pool with fitted elasticity, markdowns are spaced 1-per-6-ticks, engine floor is cost+5%, and scripts/evaluate_policies.py + data/policy_eval.json report multi-seed unit-weighted waste incl. adversarial short-dated episodes (all policies waste 37-39% there). Post-fix live catalog: served waste 20.5% vs forced-hold 29.7% (5 seeds). Superseded eval numbers above (pre-margin-floor) — use data/policy_eval.json as current."
-  ]
+    "ADDRESSED: live simulator now uses one shared footfall pool with fitted elasticity, markdowns are spaced 1-per-6-ticks, engine floor is cost+5%, and scripts/evaluate_policies.py + data/policy_eval.json report multi-seed unit-weighted waste incl. adversarial short-dated episodes (all policies waste 37-39% there). Post-fix live catalog (round-2 early ladder, true PPO engine): served waste 20.3% vs forced-hold 29.7% (5 seeds, mean revenue $3,060 vs $3,797). Superseded eval numbers above (pre-margin-floor) — use data/policy_eval.json as current."
+  ],
+  "live_optimization_round2": {
+    "target": "minimise units wasted in the live shared-pool simulator",
+    "diagnosis": "waste concentrates in high-stock mid-life SKUs (stock-cover problem)",
+    "searched": [
+      "SB3-style PPO retrains (lr 3e-4-1e-3, 10 epochs, minibatch 64) + waste x8-16/shaping variants: best live waste 21.2%",
+      "scripts/train_ppo_live.py (PPO in the multi-SKU simulator, per-SKU waste credit): raw waste 262 -> 239 units/episode, served-identical under the ladder/spacing stack",
+      "served ladder variants: early ladder won"
+    ],
+    "shipped_change": "Simulator passes waste_ladder='early' (<=36h -10%; <=96h & stock>=25 -5%); engine default stays 'standard' because the early ladder fire-sales in the hourly-step training env",
+    "live_audit_5_seeds": {
+      "seeds": [1, 7, 42, 99, 123],
+      "served_ppo_early_ladder": {"mean_units_wasted": 165.6, "units_initial_per_run": 817, "waste_rate": 0.203, "mean_revenue": 3060.21},
+      "forced_hold": {"mean_units_wasted": 243.0, "waste_rate": 0.297, "mean_revenue": 3797.44},
+      "standard_ladder_3_seed_reference": {"waste_rate": 0.227, "note": "early ladder: 0.182 on the same seeds {1,42,99}"}
+    }
+  }
 }

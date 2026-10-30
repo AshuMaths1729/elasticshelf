@@ -97,7 +97,8 @@ def compute_gae(rewards, dones, values, last_value, gamma=GAMMA, lam=GAE_LAMBDA)
 def train_ppo(demand: dict, iterations: int = 80, rollout_steps: int = ROLLOUT_STEPS,
               seed: int = 1, gamma: float = GAMMA, waste_weight: float = WASTE_WEIGHT,
               shaping: float = SHAPING, lr: float = LR, clip: float = CLIP,
-              epochs: int = EPOCHS, verbose: bool = True) -> ActorCritic:
+              epochs: int = EPOCHS, minibatch: int = MINIBATCH,
+              verbose: bool = True) -> ActorCritic:
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -118,8 +119,8 @@ def train_ppo(demand: dict, iterations: int = 80, rollout_steps: int = ROLLOUT_S
         n = len(states)
         for _ in range(epochs):
             idx = torch.randperm(n)
-            for i in range(0, n, MINIBATCH):
-                mb = idx[i:i + MINIBATCH]
+            for i in range(0, n, minibatch):
+                mb = idx[i:i + minibatch]
                 logits, value = net(s_t[mb])
                 logits = logits.clone()
                 logits[:, 3] = float("-inf")  # markdown-only mask (as in rollout)
@@ -184,6 +185,8 @@ def main() -> None:
     ap.add_argument("--shaping", type=float, default=SHAPING)
     ap.add_argument("--lr", type=float, default=LR)
     ap.add_argument("--clip", type=float, default=CLIP)
+    ap.add_argument("--epochs", type=int, default=EPOCHS)
+    ap.add_argument("--minibatch", type=int, default=MINIBATCH)
     args = ap.parse_args()
     if not (DATA / "demand_model.json").exists():
         raise SystemExit("data/demand_model.json missing — run scripts.prepare_training_data first")
@@ -192,7 +195,8 @@ def main() -> None:
           f"(gamma={args.gamma} waste_weight={args.waste_weight} shaping={args.shaping}) ...")
     net = train_ppo(demand, iterations=args.iterations, rollout_steps=args.rollout_steps,
                     seed=args.seed, gamma=args.gamma, waste_weight=args.waste_weight,
-                    shaping=args.shaping, lr=args.lr, clip=args.clip)
+                    shaping=args.shaping, lr=args.lr, clip=args.clip,
+                    epochs=args.epochs, minibatch=args.minibatch)
     ppo_stats = evaluate_ppo(net, demand, waste_weight=args.waste_weight, shaping=args.shaping)
     rule_stats = evaluate_rule(demand, waste_weight=args.waste_weight, shaping=args.shaping)
     dqn_stats = evaluate_dqn(demand, waste_weight=args.waste_weight, shaping=args.shaping)
@@ -210,7 +214,7 @@ def main() -> None:
     torch.save(net.state_dict(), weights_path)
     meta_path.write_text(json.dumps({
         "algorithm": "ppo", "markdown_only": True, "expired_never_repriced": True,
-        "expiry_ladder": "<=24h: at least -10%; <=48h & stock>=30: at least -5% (served, in ElasticityEngine)",
+        "expiry_ladder": "standard <=24h -10% / <=48h&stock>=30 -5%; live simulator uses early <=36h / <=96h&stock>=25 (in ElasticityEngine/Simulator)",
         "iterations": args.iterations,
         "rollout_steps": args.rollout_steps, "seed": args.seed, "gamma": args.gamma,
         "gae_lambda": GAE_LAMBDA, "clip": args.clip, "lr": args.lr,

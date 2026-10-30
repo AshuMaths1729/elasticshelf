@@ -172,11 +172,35 @@ SKU per 6 ticks, final-6h excepted) and the engine floor is cost + 5%,
 so hourly repricing cannot compound straight to bare cost; (3)
 evaluation reports unit-weighted waste across seeds plus the
 adversarial scenario above. Under the fixed simulator the same live
-catalog run wastes **20.5%** served vs **29.7%** at forced-hold
-(5 seeds; revenue $3,517 vs $3,797 — waste reduction still costs
-margin; anyone claiming both free should be distrusted). Earlier
+catalog run wastes **20.3%** served (PPO + early ladder below) vs
+**29.7%** at forced-hold (5 seeds; revenue $3,060 vs $3,797 — waste
+reduction still costs margin; anyone claiming both free should be
+distrusted). Earlier
 "0 units wasted live" numbers were produced by the old per-SKU
 demand model and are retracted.
+
+**Waste optimisation round 2 (live simulator is the target metric).**
+Diagnosis: waste concentrates in high-stock mid-life SKUs (avocado
+23/55, tomatoes 22/58 in one run) — a stock-cover problem. Searched:
+(i) SB3-canonical PPO settings (lr 3e-4–1e-3, 10 epochs, minibatch
+64) and waste×8–16 + shaping retrains — best raw candidate
+(`waste×16, shaping 0.1`) took live waste 22.7% → 21.2%; (ii) PPO
+trained directly in the multi-SKU shared-pool simulator
+(`scripts/train_ppo_live.py`, per-SKU waste credit assignment) —
+raw waste 262 → 239 units/episode, but served-identical once the
+ladder/spacing stack applies; (iii) served ladder variants — the
+winner is the **early ladder** the live simulator now requests
+(`waste_ladder="early"`: ≤36h → −10%, ≤96h & stock ≥25 → −5%):
+live units wasted **22.7% → 18.2%** on seeds {1,42,99} (20.3%
+across 5 seeds; seed variance is ±3pts) for ~9% less revenue than
+the standard-ladder served policy on the same seeds. Cover-ratio
+and even-earlier ladders wasted more or earned less, and the early
+ladder is deliberately *not* the engine default: in the hourly-step
+training env it fire-sales (revenue −22%), because only the live
+simulator spaces markdowns to one per 6 ticks. Structural limit:
+with a shared pool, pricing mostly *reallocates* demand — the
+remaining waste is bounded by total footfall vs stock/expiry
+schedule, i.e. an ordering problem (see adversarial results).
 
 **Business invariants (all policies, enforced in `ElasticityEngine.decide`):**
 prices are *markdown-only* — the +5% action is masked for PPO in training

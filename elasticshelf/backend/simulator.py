@@ -214,7 +214,8 @@ class Simulator:
             new_price, action, policy = self.fx.decide(
                 item.current_price, item.base_price, item.cost_basis,
                 item.quantity_on_shelf, hrs_left, mod,
-                category=item.category, footfall=ff, hour=self.sim_time.hour)
+                category=item.category, footfall=ff, hour=self.sim_time.hour,
+                waste_ladder="early")
             item.last_reasoning = reasoning
             # Markdown spacing (realism fix): at most one markdown per SKU
             # per 6 ticks, so hourly repricing cannot compound -10% steps

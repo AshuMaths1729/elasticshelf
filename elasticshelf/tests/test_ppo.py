@@ -108,6 +108,9 @@ def test_expiry_ladder_forces_markdown():
         # 40h left with heavy stock: at least -5%.
         p, a, _ = e.decide(10.0, 10.0, 5.0, 40, 40, 0.8)
         assert a in (0, 1) and p < 10.0, (policy, p, a)
+        # Early ladder profile (live simulator): 72h left, stock 30 -> markdown.
+        p, a, _ = e.decide(10.0, 10.0, 5.0, 30, 72, 0.8, waste_ladder="early")
+        assert a in (0, 1) and p < 10.0, (policy, p, a)
         # Far from expiry with light stock: ladder does not force anything
         # (price may hold, but per markdown-only it may never rise).
         p, a, _ = e.decide(10.0, 10.0, 5.0, 5, 100, 0.0)
