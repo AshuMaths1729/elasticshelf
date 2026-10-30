@@ -12,16 +12,17 @@ over WebSocket.
 |---|---|---|
 | A. Ingestion & Normalization | `POST /api/v1/inventory/sync` | `backend/main.py` + `backend/models.py` — POS/ERP payloads normalized to the `InventoryItem` schema |
 | B. Context Engine | LLaMA 3 + RAG | `backend/context_engine.py` — `muse-spark-1.3-contributor` (OpenAI-compatible endpoint) over a keyword-retrieval corpus; deterministic mock fallback offline |
-| C. Elasticity Engine | PyTorch RL / DQN | `backend/elasticity.py` — trained DQN (`data/dqn_weights.pt`), rule-distilled lite net, or transparent rules |
+| C. Elasticity Engine | PyTorch RL / DQN | `backend/elasticity.py` + `backend/pricing_env.py` — trained DQN (`data/dqn_weights.pt`), rule-distilled lite net, transparent rules, or opt-in `rule` / `tuned-rule` / `mpc` policies (see below) |
 | D. ESL Bridge | hardware payloads | `backend/esl_bridge.py` — generic + Vusion/ Pricer-shaped payloads, ack-logged |
 | Store simulator | demo harness | `backend/simulator.py` — clock, footfall, weather walk, scripted events, elastic POS sales, repricing cooldowns |
 | Storefront | ESL fleet + POS | `frontend/` — e-ink-style ESL wall, live checkout feed, context panel, push audit (`/ws/stream`, REST fallback) |
 
 Pricing loop per SKU per tick: context engine emits a demand modifier in
-[-1, +1] with one-line reasoning → DQN maps
+[-1, +1] with one-line reasoning → elasticity engine maps
 (price, stock, hours-to-expiry, modifier) to −10/−5/0/+5% → ESL Bridge pushes
 changes (price floor = cost, cap = 1.5× base, max one markdown per 3 ticks
-unless expiring within 24h).
+unless expiring within 24h). The policy is selectable via `ELASTICITY_POLICY`
+(`auto` = DQN first, the default; `dqn` / `rule` / `tuned-rule` / `mpc`).
 
 ## Quickstart
 
@@ -45,14 +46,17 @@ Open http://127.0.0.1:8000 in a browser, press **Start**.
 | Catalog w/ expiry + stock | synthetic, seeded (24 perishable SKUs) | `data/catalog.json` |
 | Real transactions (~106k) | UCI Online Retail download | `data/uci_online_retail.xlsx` |
 | Demand model | elasticity fit + real UCI hourly curve | `data/demand_model.json` |
-| Trained DQN | `scripts/train_dqn.py` (2500 eps) | `data/dqn_weights.pt`, `data/dqn_meta.json` |
+| Trained DQN | `scripts/train_dqn.py` (3500 eps) | `data/dqn_weights.pt`, `data/dqn_meta.json` |
+| Tuned rule params | `scripts/tune_rule.py` (random search, no torch) | `data/rule_params.json` |
+| Margin↔waste frontier | `scripts/tune_rule.py --sweep` | `data/rule_pareto.json` |
 | Product names/images | Open Food Facts API | `data/open_catalog.json` |
 | Weather forecast | Open-Meteo API | `data/weather.json` |
 | Footfall sensor stream | simulator (time-of-day × weather × events) | live |
 | Local events calendar | simulator script (market, match day, festival, parade) | live |
 
 Regenerate/refresh: `generate_synthetic` (offline) → `fetch_open_data`
-(optional net) → `prepare_training_data` (UCI + elasticity fit) → `train_dqn`.
+(optional net) → `prepare_training_data` (UCI + elasticity fit) → `train_dqn`
+→ `tune_rule` (tuned-rule params + optional Pareto sweep, no torch needed).
 
 ## DQN training
 
@@ -63,17 +67,54 @@ hour-by-hour; demand is sampled from the fitted elasticity model and the real
 UCI footfall curve; reward = realized margin per hour minus a 2×-cost waste
 penalty on expired leftover stock.
 
-Latest eval (`data/dqn_meta.json`, 200 held-out episodes):
+Latest eval (`data/dqn_meta.json`, 200 held-out episodes, 3500 training eps):
 
 | Policy | Reward | Sellout | Waste | Deepest discount |
 |---|---|---|---|---|
-| DQN | **+10.73** | 64% | 7% | 19% |
-| Rules | +6.34 | 82% | 5% | 26% |
+| DQN | **+10.09** | 56% | 12% | 14% |
+| Rules | +4.88 | 78% | 7% | 29% |
 
-The DQN earns ~70% more margin-adjusted return with shallower discounts by
+The DQN earns ~2× the margin-adjusted return with shallower discounts by
 holding price on safe stock and marking down only at-risk inventory
 (spot-checked: expiring overstock → −5%, demand surge → +5%, cost floor → hold).
-Retrain: `python -m scripts.train_dqn --episodes 2500`.
+Retrain: `python -m scripts.train_dqn --episodes 3500`.
+
+## Pricing policies (margin-vs-waste tradeoff)
+
+No retraining needed — pick a policy with `ELASTICITY_POLICY`:
+
+| Policy | Backend | Behavior |
+|---|---|---|
+| `auto` (default) | DQN → lite → rules | best available backend |
+| `dqn` | trained DQN only | falls back to rules if torch/weights missing |
+| `rule` | transparent thresholds | legacy urgency-score policy |
+| `tuned-rule` | `data/rule_params.json` | random-searched thresholds, served from file |
+| `mpc` | model-predictive rollout | one-step lookahead on the fitted demand model; `ELASTICITY_WASTE_WEIGHT` tunes margin↔waste live |
+
+`scripts/tune_rule.py` searches rule thresholds on the exact DQN training
+dynamics (`backend/pricing_env.py`, shared with `train_dqn.py`), so results
+are directly comparable to the DQN:
+
+```
+python -m scripts.tune_rule --trials 80            # writes data/rule_params.json
+python -m scripts.tune_rule --sweep 0.5,1,2,4,8 --include-mpc   # writes data/rule_pareto.json
+```
+
+Sweep snapshot (`data/rule_pareto.json`, reward at each waste weight λ):
+
+| λ | Default rule | Tuned rule | MPC |
+|---|---|---|---|
+| 0.5 | +6.73 | +11.15 | +12.18 |
+| 1.0 | +6.31 | +10.66 | +11.43 |
+| 2.0 | +5.47 | +10.11 | +8.75 |
+| 4.0 | +3.78 | +9.08 | +7.04 |
+| 8.0 | +0.41 | +7.02 | +2.53 |
+
+At the default λ=2 the tuned rule matches the DQN (+10.1 vs +10.1) with
+lower waste (4% vs 12%), while MPC wins when waste is cheap and the tuned
+rule wins when waste is expensive. The `policy` field on each `pricing`
+event records which backend priced that SKU (`pytorch-dqn`, `rule-tuned`,
+`mpc-w2`, …).
 
 ## Context engine
 
@@ -121,6 +162,10 @@ Copy `.env.example` to `.env`:
 | `SPARK_API_KEY` / `GROQ_API_KEY` / `TOGETHER_API_KEY` | — | provider credentials |
 | `STORE_ID` | `ST-4092` | demo store id |
 | `SIM_TICK_SECONDS` | `2.0` | wall-clock seconds per tick (also live-adjustable) |
+| `ELASTICITY_POLICY` | `auto` | `auto` \| `dqn` \| `rule` \| `tuned-rule` \| `mpc` |
+| `ELASTICITY_WASTE_WEIGHT` | `2.0` | waste penalty λ for `mpc` (live tradeoff knob) |
+
+`.env` is loaded automatically at startup (stdlib loader, real env wins).
 
 ## Project layout
 
@@ -128,23 +173,30 @@ Copy `.env.example` to `.env`:
 elasticshelf/
   backend/      main.py (API+WS+static)  models.py  store.py
                 simulator.py  context_engine.py  elasticity.py  esl_bridge.py
+                pricing_env.py (shared DemandEnv for train/tune/eval)
   frontend/     index.html  app.js  styles.css
   scripts/      generate_synthetic.py  fetch_open_data.py
-                prepare_training_data.py  train_dqn.py
+                prepare_training_data.py  train_dqn.py  tune_rule.py
   tests/        test_smoke.py (API + WS + pricing + elasticity bounds)
-  data/         catalog, transactions, UCI workbook, demand model, DQN weights
+                test_tradeoff.py (tuned rules, MPC, lambda env)
+  data/         catalog, transactions, UCI workbook, demand model,
+                DQN weights, tuned rule params, Pareto frontier
 ```
 
 ## Tests
 
 ```
 python -m tests.test_smoke
+python -m tests.test_tradeoff
 ```
 
-Covers: WebSocket hello serialization, tick + pricing loop with the
-`llm_reasoning` audit contract, inventory sync round-trip, and 200 randomized
-elasticity bound checks (never below cost, never above 1.5× base, valid
-actions). No test framework required.
+`test_smoke` covers: WebSocket hello serialization, tick + pricing loop with
+the `llm_reasoning` audit contract, inventory sync round-trip, and 200
+randomized elasticity bound checks (never below cost, never above 1.5× base,
+valid actions). `test_tradeoff` covers: tuned-rule parametrization (defaults
+reproduce legacy behavior), waste-weight/shaping env options, the MPC policy
+knob, engine policy selection, and `tune_rule` search helpers. No test
+framework required.
 
 ## Demo script (2 min)
 
