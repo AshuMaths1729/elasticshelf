@@ -240,8 +240,13 @@ if HAS_TORCH:
             return self.policy_head(h), self.value_head(h).squeeze(-1)
 
         def act_greedy(self, state) -> int:
+            # Markdown-only (business rule): the +5% action (index 3) is
+            # masked out for PPO at serve time and during training, so the
+            # policy only ever chooses -10% / -5% / hold.
             with torch.no_grad():
                 logits, _ = self(torch.tensor([state], dtype=torch.float32))
+                logits = logits.clone()
+                logits[:, 3] = float("-inf")
                 return int(torch.argmax(logits, dim=1).item())
 
     def _train_qnet(epochs: int = 60) -> "QNet":
@@ -338,7 +343,15 @@ class ElasticityEngine:
                category: Optional[str] = None, footfall: Optional[float] = None,
                hour: Optional[int] = None, base_qty: Optional[float] = None,
                elasticity: Optional[float] = None) -> Tuple[float, int, str]:
-        """Returns (new_price, action_idx, policy_note). Never prices below cost."""
+        """Returns (new_price, action_idx, policy_note). Never prices below cost.
+
+        Business invariants (enforced here for every policy, incl. DQN/PPO):
+        - Expired stock (hours_to_expiry <= 0) is never repriced.
+        - Markdown-only: prices never increase; any +5% a policy picks is
+          served as hold. Shelf prices only ever go down or stay put.
+        """
+        if hours_to_expiry <= 0:
+            return round(float(current_price), 2), 2, "expired-hold"
         price_ratio = current_price / max(base_price, 1e-6)
         if self._policy == "mpc":
             if base_qty is None or elasticity is None:
@@ -370,10 +383,11 @@ class ElasticityEngine:
         else:
             action = rule_policy(price_ratio, stock, hours_to_expiry, demand_mod)
             note = "ppo-rules-fallback" if self._policy == "ppo" else "rule-policy"
-        # Cent-safe bounds: never below cost, never above 1.5x base.
+        # Cent-safe bounds: never below cost, never above 1.5x base, and
+        # markdown-only — never above the current price.
         floor = math.ceil(cost_basis * 100 - 1e-9) / 100
         cap = math.floor(base_price * 1.5 * 100 + 1e-9) / 100
-        new_price = round(min(cap, max(floor, current_price * (1 + ACTIONS[action]))), 2)
+        new_price = round(min(cap, current_price, max(floor, current_price * (1 + ACTIONS[action]))), 2)
         if new_price == current_price and action != 2:
             action = 2  # rounding/floor absorbed the move -> report hold
         return new_price, action, note

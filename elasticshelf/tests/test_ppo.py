@@ -35,7 +35,7 @@ def test_actor_critic_shapes():
     logits, value = net(torch.zeros((5, 4)))
     assert logits.shape == (5, 4), logits.shape
     assert value.shape == (5,), value.shape
-    assert net.act_greedy([1.0, 0.5, 0.5, 0.0]) in (0, 1, 2, 3)
+    assert net.act_greedy([1.0, 0.5, 0.5, 0.0]) in (0, 1, 2)  # +5% masked out
 
 
 def test_engine_ppo_bounds():
@@ -74,6 +74,28 @@ def test_ppo_short_training_runs():
     assert abs(ppo_stats["reward"]) < 1e6
 
 
+def test_never_increases_and_expired_never_repriced():
+    """Business invariants, enforced by ElasticityEngine for every policy:
+    prices only ever decrease or hold, and expired stock is never repriced."""
+    from backend.elasticity import ElasticityEngine
+    rng = random.Random(1)
+    for policy in ("ppo", "rule", "tuned-rule", "mpc", "dqn"):
+        e = ElasticityEngine(policy=policy)
+        for _ in range(100):
+            base = rng.uniform(2, 16)
+            cost = base * rng.uniform(0.45, 0.7)
+            cur = round(rng.uniform(cost, base), 2)  # shelf prices are cent values
+            hrs = rng.uniform(0.1, 120)
+            p, a, _ = e.decide(cur, base, cost, rng.randint(0, 60),
+                               hrs, rng.uniform(-1, 1))
+            assert p <= cur + 1e-9, (policy, p, cur)   # markdown-only
+            assert a != 3, (policy, a)                 # +5% never served
+            # Expired (and exactly-at-expiry): price frozen, hold action.
+            p2, a2, note2 = e.decide(cur, base, cost, 30, rng.uniform(-48, 0), 0.5)
+            assert p2 == round(cur, 2) and a2 == 2 and note2 == "expired-hold", \
+                (policy, p2, a2, note2)
+
+
 def test_gae_shapes():
     if not _has_torch():
         return
@@ -89,5 +111,6 @@ if __name__ == "__main__":
     test_actor_critic_shapes()
     test_engine_ppo_bounds()
     test_ppo_short_training_runs()
+    test_never_increases_and_expired_never_repriced()
     test_gae_shapes()
     print("ALL PPO TESTS PASSED")

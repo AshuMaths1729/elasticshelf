@@ -62,6 +62,10 @@ def collect_rollout(net: ActorCritic, env: DemandEnv, state, steps: int):
     for _ in range(steps):
         with torch.no_grad():
             logits, value = net(torch.tensor([s], dtype=torch.float32))
+            # Markdown-only business rule: mask the +5% action (index 3)
+            # so PPO explores/learns only -10% / -5% / hold.
+            logits = logits.clone()
+            logits[:, 3] = float("-inf")
             dist = Categorical(logits=logits)
             a = dist.sample()
         ns, r, done = env.step(int(a.item()))
@@ -117,6 +121,8 @@ def train_ppo(demand: dict, iterations: int = 80, rollout_steps: int = ROLLOUT_S
             for i in range(0, n, MINIBATCH):
                 mb = idx[i:i + MINIBATCH]
                 logits, value = net(s_t[mb])
+                logits = logits.clone()
+                logits[:, 3] = float("-inf")  # markdown-only mask (as in rollout)
                 dist = Categorical(logits=logits)
                 new_lp = dist.log_prob(a_t[mb])
                 ratio = torch.exp(new_lp - lp_t[mb])
@@ -203,7 +209,8 @@ def main() -> None:
         print("Non-default tradeoff run — main PPO files left untouched.")
     torch.save(net.state_dict(), weights_path)
     meta_path.write_text(json.dumps({
-        "algorithm": "ppo", "iterations": args.iterations,
+        "algorithm": "ppo", "markdown_only": True, "expired_never_repriced": True,
+        "iterations": args.iterations,
         "rollout_steps": args.rollout_steps, "seed": args.seed, "gamma": args.gamma,
         "gae_lambda": GAE_LAMBDA, "clip": args.clip, "lr": args.lr,
         "waste_weight": args.waste_weight, "shaping": args.shaping,

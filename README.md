@@ -144,14 +144,24 @@ run for all three):
 
 | Policy | Reward | Margin | Sellout | Waste | Deepest discount |
 |---|---|---|---|---|---|
-| PPO | **+8.77** | 12.10 | 62% | 11% | 24% |
-| DQN | +8.26 | **14.68** | 53% | 15% | 14% |
-| Default rule | +6.92 | 7.96 | 84% | **4%** | 28% |
+| PPO (markdown-only) | **+9.82** | 12.87 | 70% | 8% | 9% |
+| DQN | +7.79 | **14.05** | 54% | 16% | 15% |
+| Default rule | +4.88 | 6.61 | 79% | **6%** | 30% |
 
-PPO edges the DQN on reward with less waste and deeper sell-through, but
-still trails the tuned rule (+10.11 reward / 4% waste in
+PPO edges the DQN on reward with half the waste and better sell-through,
+but still trails the tuned rule (+10.11 reward / 4% waste in
 `data/rule_params.json`) — so PPO ships as opt-in, not the default.
+(Eval numbers vary a few points between runs: `DemandEnv` draws product
+categories from the global RNG.)
 Next levers: `--waste-weight` retrains, entropy/LR, more iterations.
+
+**Business invariants (all policies, enforced in `ElasticityEngine.decide`):**
+prices are *markdown-only* — the +5% action is masked for PPO in training
+and at serve time, and clamped to hold for DQN/rule/MPC — and expired
+stock (`hours_to_expiry <= 0`) is never repriced (`expired-hold`; the
+simulator also skips expired SKUs entirely, including the LLM call).
+Earlier versions allowed +5% "margin recovery" on safe stock; that was
+removed because shelf prices must only ever go down.
 
 ## Context engine
 

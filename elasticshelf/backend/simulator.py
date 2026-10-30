@@ -160,6 +160,11 @@ class Simulator:
         audit, pushes, mods = [], [], []
         for item in self.store.all():
             hrs_left = (item.expiration_timestamp - self.sim_time).total_seconds() / 3600.0
+            if hrs_left <= 0:
+                # Expired: never repriced (also skips a wasted LLM call).
+                # The tick sales stage writes the stock off as waste.
+                item.last_reasoning = "Expired — repricing disabled."
+                continue
             mod, reasoning, llm_used = self.ctx.demand_modifier(
                 item.sku, item.name, item.category, hrs_left, item.quantity_on_shelf,
                 ff, self.temperature_c, self.precipitation_mm, event)
@@ -170,7 +175,8 @@ class Simulator:
                 category=item.category, footfall=ff, hour=self.sim_time.hour)
             item.last_reasoning = reasoning
             # Cooldown: at most one markdown per 3 ticks unless expiring <24h.
-            # Margin recovery (+5%) is always allowed.
+            # Prices never increase (markdown-only, enforced in the engine),
+            # so there is no margin-recovery exception here.
             cooled = (self.tick_count - self._last_push_tick.get(item.sku, -99)) < 3
             if cooled and new_price < item.current_price and hrs_left >= 24:
                 new_price, action = item.current_price, 2

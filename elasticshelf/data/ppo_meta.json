@@ -1,5 +1,7 @@
 {
   "algorithm": "ppo",
+  "markdown_only": true,
+  "expired_never_repriced": true,
   "iterations": 300,
   "rollout_steps": 2048,
   "seed": 1,
@@ -10,25 +12,25 @@
   "waste_weight": 2.0,
   "shaping": 0.0,
   "eval_ppo": {
-    "reward": 8.77,
-    "margin": 12.1,
-    "sellout_rate": 0.62,
-    "waste_rate": 0.11,
-    "avg_deepest_discount": 0.24
+    "reward": 9.82,
+    "margin": 12.87,
+    "sellout_rate": 0.7,
+    "waste_rate": 0.08,
+    "avg_deepest_discount": 0.09
   },
   "eval_rule": {
-    "reward": 6.92,
-    "margin": 7.96,
-    "sellout_rate": 0.84,
-    "waste_rate": 0.04,
-    "avg_deepest_discount": 0.28
+    "reward": 4.88,
+    "margin": 6.61,
+    "sellout_rate": 0.79,
+    "waste_rate": 0.06,
+    "avg_deepest_discount": 0.3
   },
   "eval_dqn": {
-    "reward": 8.26,
-    "margin": 14.68,
-    "sellout_rate": 0.53,
-    "waste_rate": 0.15,
-    "avg_deepest_discount": 0.14
+    "reward": 7.79,
+    "margin": 14.05,
+    "sellout_rate": 0.54,
+    "waste_rate": 0.16,
+    "avg_deepest_discount": 0.15
   },
   "actions": [
     -0.1,
