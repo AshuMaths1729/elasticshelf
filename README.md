@@ -143,26 +143,39 @@ Latest eval (`data/ppo_meta.json`, one reproducible protocol —
 `DemandEnv(seed=999)` × 200 rollouts for every row; revenue and profit
 (margin) maximised subject to aggressively minimised waste):
 
+All rows below are **served** through `ElasticityEngine.decide` (same
+markdown-only + expiry-ladder invariants for every policy — the earlier
+draft compared served PPO against *raw* DQN and overstated the gap):
+
 | Policy (served) | Revenue | Profit (margin) | Reward | Sellout | **Units wasted** |
 |---|---|---|---|---|---|
-| **PPO + expiry ladder** | 29.37 | 9.58 | +8.48 | 87% | **3%** |
-| DQN | 29.44 | **14.15** | +8.77 | 55% | 14% |
+| **PPO + ladder** | **29.37** | **9.58** | +8.48 | 87% | **3%** |
+| DQN + ladder | 25.75 | 8.93 | +7.74 | 86% | 4% |
+| Tuned rule + ladder | 24.30 | 7.29 | +6.56 | 88% | 3% |
+| MPC + ladder | 21.45 | 3.80 | +2.85 | 91% | 3% |
 | PPO (raw, no ladder) | 25.91 | 10.55 | +7.83 | 69% | 9% |
-| Default rule | 24.70 | 7.56 | +5.97 | 83% | 4% |
+| DQN (raw, no ladder) | 29.44 | **14.15** | +8.77 | 55% | 14% |
 
-The served PPO matches DQN revenue while cutting wasted units from
-14% → **3%** (≈ the environment floor: even always-−10% wastes 4%,
-because overnight UCI footfall is zero). What the waste sweep found:
-raising the terminal waste penalty alone (×8) backfired (14% waste —
-PPO just holds and hopes); dense expiry shaping (0.5) reached 4% waste
-but destroyed profit (margin ~1, fire-sale to the cost floor);
+Unit-weighted audit (actual units, not per-episode means): served PPO
+wastes **209 / 7,379 units = 2.8%**. What the waste sweep found: raising
+the terminal waste penalty alone (×8) backfired (14% waste); dense
+expiry shaping (0.5) reached 4% waste but collapsed profit (margin ~1);
 `waste×16 + shaping 0.1` raw PPO got 5% waste at revenue 29.11. The
-shipped combination — PPO plus the engine's expiry ladder (≤24h: at
-least −10%; ≤48h & stock ≥30: at least −5%) — dominates on the
-waste-first objective. Still open: DQN keeps a profit edge (14.15 vs
-9.58) in exchange for 4–5× the waste, and the tuned rule
-(`data/rule_params.json`, different eval run) remains competitive.
-Next levers: `--waste-weight` retrains, entropy/LR, more iterations.
+ladder gets every policy to the ~3% floor — PPO's edge is keeping
+revenue/profit highest while there.
+
+**Reward-hacking audit (read before trusting "0 waste" live):** in the
+live simulator the served policy sold all 817 catalog units with
+`units_wasted: 0` across 5 seeds, while forced-hold wasted 17.2% —
+accounting checks out (`sold + wasted + left = initial`). *But* the
+live demand model makes clearing far easier than real retail: demand is
+per-SKU independent (no shared footfall/budget), a 40% discount roughly
+triples per-SKU demand (`2.2 + 9·rel`, +40% under 24h), the ladder
+compounds −10%/tick so 21% of env steps sit at the cost floor, and
+`DemandEnv` episodes draw stock-feasible expiries. Zero live waste is
+therefore a simulator result, not a forecast — validate on real POS
+demand before claiming it. Details: `audit_*` fields in
+`data/ppo_meta.json`.
 
 **Business invariants (all policies, enforced in `ElasticityEngine.decide`):**
 prices are *markdown-only* — the +5% action is masked for PPO in training

@@ -51,5 +51,58 @@
     0.0,
     0.05
   ],
-  "notes": "Served = PPO + expiry ladder + markdown-only/expired invariants in ElasticityEngine.decide. Waste sweep (same protocol): waste-penalty alone (w8) waste 14%; shaping 0.5 waste 4% but margin ~1; w16+shaping0.1 raw waste 5% revenue 29.11; served hybrid waste 3%."
+  "notes": "Served = PPO + expiry ladder + markdown-only/expired invariants in ElasticityEngine.decide. Waste sweep (same protocol): waste-penalty alone (w8) waste 14%; shaping 0.5 waste 4% but margin ~1; w16+shaping0.1 raw waste 5% revenue 29.11; served hybrid waste 3%.",
+  "eval_served_all_policies": {
+    "ppo": {
+      "reward": 8.48,
+      "margin": 9.58,
+      "revenue": 29.37,
+      "sellout_rate": 0.87,
+      "waste_rate": 0.03,
+      "avg_deepest_discount": 0.28
+    },
+    "dqn": {
+      "reward": 7.74,
+      "margin": 8.93,
+      "revenue": 25.75,
+      "sellout_rate": 0.86,
+      "waste_rate": 0.04,
+      "avg_deepest_discount": 0.31
+    },
+    "rule": {
+      "reward": 4.09,
+      "margin": 5.35,
+      "revenue": 22.46,
+      "sellout_rate": 0.87,
+      "waste_rate": 0.04,
+      "avg_deepest_discount": 0.34
+    },
+    "tuned-rule": {
+      "reward": 6.56,
+      "margin": 7.29,
+      "revenue": 24.3,
+      "sellout_rate": 0.88,
+      "waste_rate": 0.03,
+      "avg_deepest_discount": 0.32
+    },
+    "mpc": {
+      "reward": 2.85,
+      "margin": 3.8,
+      "revenue": 21.45,
+      "sellout_rate": 0.91,
+      "waste_rate": 0.03,
+      "avg_deepest_discount": 0.37
+    }
+  },
+  "audit_unit_weighted_waste_served_ppo": {
+    "units_wasted": 209,
+    "units_initial": 7379,
+    "unit_weighted_waste_rate": 0.028,
+    "steps_at_cost_floor_pct": 21.0
+  },
+  "audit_corrections": [
+    "Earlier table compared SERVED PPO+ladder vs RAW DQN (waste 14%): apples-to-oranges. Served DQN (same ladder/invariants) wastes 4%. PPO still leads served policies on revenue/margin, waste tied at floor.",
+    "Zero live waste is accounting-correct for this catalog (sold+wasted+left=817 across 5 seeds; forced-hold wastes 17.2%), but the live simulator's per-SKU independent demand and discount elasticity (lam ~ 2.2 + 9*rel, +40% under 24h) make clearing far easier than real retail; prices also compound -10%/tick to the cost floor inside 24h (21% of env steps at floor). Treat live 0-waste as a simulator artifact until validated on real POS demand.",
+    "DemandEnv episodes draw stock-feasible expiries (hours ~ stock x 0.8-2.5), so doomed short-dated overstock is underrepresented."
+  ]
 }

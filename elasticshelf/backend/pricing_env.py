@@ -15,7 +15,6 @@ Rule tuning and MPC evaluation import from here so they never need torch.
 """
 from __future__ import annotations
 
-import random
 from typing import Callable, Dict
 
 import numpy as np
