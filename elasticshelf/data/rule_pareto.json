@@ -1,0 +1,192 @@
+[
+  {
+    "waste_weight": 0.5,
+    "rule_default": {
+      "reward": 6.73,
+      "margin": 7.15,
+      "sellout_rate": 0.83,
+      "waste_rate": 0.05,
+      "avg_deepest_discount": 0.28
+    },
+    "tuned_rule": {
+      "params": {
+        "hrs_urgent": 7.622,
+        "hrs_soon": 35.482,
+        "hrs_watch": 50.581,
+        "stock_big": 38.0,
+        "dem_gain": 1.487,
+        "hi_thresh": 3.133,
+        "lo_thresh": 2.418,
+        "recover_thresh": -1.791
+      },
+      "stats": {
+        "reward": 11.15,
+        "margin": 11.64,
+        "sellout_rate": 0.78,
+        "waste_rate": 0.06,
+        "avg_deepest_discount": 0.18
+      }
+    },
+    "mpc": {
+      "stats": {
+        "reward": 12.18,
+        "margin": 14.41,
+        "sellout_rate": 0.24,
+        "waste_rate": 0.24,
+        "avg_deepest_discount": 0.03
+      }
+    }
+  },
+  {
+    "waste_weight": 1.0,
+    "rule_default": {
+      "reward": 6.31,
+      "margin": 7.15,
+      "sellout_rate": 0.83,
+      "waste_rate": 0.05,
+      "avg_deepest_discount": 0.28
+    },
+    "tuned_rule": {
+      "params": {
+        "hrs_urgent": 7.622,
+        "hrs_soon": 35.482,
+        "hrs_watch": 50.581,
+        "stock_big": 38.0,
+        "dem_gain": 1.487,
+        "hi_thresh": 3.133,
+        "lo_thresh": 2.418,
+        "recover_thresh": -1.791
+      },
+      "stats": {
+        "reward": 10.66,
+        "margin": 11.64,
+        "sellout_rate": 0.78,
+        "waste_rate": 0.06,
+        "avg_deepest_discount": 0.18
+      }
+    },
+    "mpc": {
+      "stats": {
+        "reward": 11.43,
+        "margin": 13.67,
+        "sellout_rate": 0.57,
+        "waste_rate": 0.13,
+        "avg_deepest_discount": 0.14
+      }
+    }
+  },
+  {
+    "waste_weight": 2.0,
+    "rule_default": {
+      "reward": 5.47,
+      "margin": 7.15,
+      "sellout_rate": 0.83,
+      "waste_rate": 0.05,
+      "avg_deepest_discount": 0.28
+    },
+    "tuned_rule": {
+      "params": {
+        "hrs_urgent": 14.68,
+        "hrs_soon": 39.915,
+        "hrs_watch": 55.134,
+        "stock_big": 50.0,
+        "dem_gain": 0.301,
+        "hi_thresh": 3.365,
+        "lo_thresh": 1.974,
+        "recover_thresh": -0.75
+      },
+      "stats": {
+        "reward": 10.11,
+        "margin": 11.15,
+        "sellout_rate": 0.87,
+        "waste_rate": 0.04,
+        "avg_deepest_discount": 0.23
+      }
+    },
+    "mpc": {
+      "stats": {
+        "reward": 8.75,
+        "margin": 11.58,
+        "sellout_rate": 0.68,
+        "waste_rate": 0.08,
+        "avg_deepest_discount": 0.27
+      }
+    }
+  },
+  {
+    "waste_weight": 4.0,
+    "rule_default": {
+      "reward": 3.78,
+      "margin": 7.15,
+      "sellout_rate": 0.83,
+      "waste_rate": 0.05,
+      "avg_deepest_discount": 0.28
+    },
+    "tuned_rule": {
+      "params": {
+        "hrs_urgent": 14.68,
+        "hrs_soon": 39.915,
+        "hrs_watch": 55.134,
+        "stock_big": 50.0,
+        "dem_gain": 0.301,
+        "hi_thresh": 3.365,
+        "lo_thresh": 1.974,
+        "recover_thresh": -0.75
+      },
+      "stats": {
+        "reward": 9.08,
+        "margin": 11.15,
+        "sellout_rate": 0.87,
+        "waste_rate": 0.04,
+        "avg_deepest_discount": 0.23
+      }
+    },
+    "mpc": {
+      "stats": {
+        "reward": 7.04,
+        "margin": 10.83,
+        "sellout_rate": 0.76,
+        "waste_rate": 0.07,
+        "avg_deepest_discount": 0.3
+      }
+    }
+  },
+  {
+    "waste_weight": 8.0,
+    "rule_default": {
+      "reward": 0.41,
+      "margin": 7.15,
+      "sellout_rate": 0.83,
+      "waste_rate": 0.05,
+      "avg_deepest_discount": 0.28
+    },
+    "tuned_rule": {
+      "params": {
+        "hrs_urgent": 14.68,
+        "hrs_soon": 39.915,
+        "hrs_watch": 55.134,
+        "stock_big": 50.0,
+        "dem_gain": 0.301,
+        "hi_thresh": 3.365,
+        "lo_thresh": 1.974,
+        "recover_thresh": -0.75
+      },
+      "stats": {
+        "reward": 7.02,
+        "margin": 11.15,
+        "sellout_rate": 0.87,
+        "waste_rate": 0.04,
+        "avg_deepest_discount": 0.23
+      }
+    },
+    "mpc": {
+      "stats": {
+        "reward": 2.53,
+        "margin": 10.46,
+        "sellout_rate": 0.77,
+        "waste_rate": 0.06,
+        "avg_deepest_discount": 0.3
+      }
+    }
+  }
+]

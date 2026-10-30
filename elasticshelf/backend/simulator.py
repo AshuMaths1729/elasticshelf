@@ -166,7 +166,8 @@ class Simulator:
             mods.append(mod)
             new_price, action, policy = self.fx.decide(
                 item.current_price, item.base_price, item.cost_basis,
-                item.quantity_on_shelf, hrs_left, mod)
+                item.quantity_on_shelf, hrs_left, mod,
+                category=item.category, footfall=ff, hour=self.sim_time.hour)
             item.last_reasoning = reasoning
             # Cooldown: at most one markdown per 3 ticks unless expiring <24h.
             # Margin recovery (+5%) is always allowed.

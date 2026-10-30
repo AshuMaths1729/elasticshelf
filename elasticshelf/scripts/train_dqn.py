@@ -8,6 +8,10 @@ per hour minus a terminal waste penalty for expired leftover stock.
 
 Writes: data/dqn_weights.pt, data/dqn_meta.json
 Run:  python -m scripts.train_dqn [--episodes 2500]   (from elasticshelf/)
+
+Tradeoff options (--waste-weight, --gamma, --shaping) retrain with a
+different margin-vs-waste objective. Non-default runs write suffixed files
+(data/dqn_weights_w<W>_g<G>.pt) and never overwrite the main DQN.
 """
 from __future__ import annotations
 
@@ -26,6 +30,8 @@ except ImportError:
     raise SystemExit("torch is required: pip install -r requirements.txt")
 
 from backend.elasticity import ACTIONS, QNet, rule_policy, state_features
+from backend.pricing_env import (DEMAND_SCALE, PRICE_CAP, SHAPING,
+                                 WASTE_WEIGHT, DemandEnv, rollout_stats)
 
 BASE = Path(__file__).resolve().parent.parent
 DATA = BASE / "data"
@@ -36,61 +42,15 @@ BUFFER = 20_000
 BATCH = 128
 TARGET_SYNC = 300
 EPS_START, EPS_END, EPS_DECAY_STEPS = 1.0, 0.05, 15_000
-DEMAND_SCALE = 0.5  # tuned so full-price sales roughly match typical stock
-PRICE_CAP = 1.5  # max price as a multiple of base (matches serve-time cap)
 
 
-class DemandEnv:
-    def __init__(self, demand: dict, seed: int = 0):
-        self.demand = demand
-        self.rng = np.random.default_rng(seed)
-        self.reset()
-
-    def reset(self):
-        cats = list(self.demand["categories"].keys())
-        self.cat = random.choice(cats)
-        p = self.demand["categories"][self.cat]
-        self.base_qty = p["base_qty"]
-        self.elast = p["elasticity"]
-        self.base_price = float(self.rng.uniform(2.0, 16.0))
-        self.cost = round(self.base_price * float(self.rng.uniform(0.45, 0.70)), 2)
-        self.price = self.base_price
-        self.stock = int(self.rng.integers(10, 61))
-        # Feasible cover: hours scale with stock (no doomed 55-units-in-8h draws).
-        self.hours = float(np.clip(self.stock * self.rng.uniform(0.8, 2.5), 12, 120))
-        self.hour = int(self.rng.integers(0, 24))
-        self.dem = float(self.rng.uniform(-0.5, 0.5))
-        return self._state()
-
-    def _state(self):
-        return state_features(self.price / self.base_price, self.stock, self.hours, self.dem)
-
-    def step(self, action: int):
-        self.price = round(min(self.base_price * PRICE_CAP,
-                               max(self.cost, self.price * (1 + ACTIONS[action]))), 2)
-        # Signed elasticity: discounts lift demand, hikes cut it (no free lunch).
-        rel = max(-0.5, min(0.6, (self.base_price - self.price) / self.base_price))
-        foot = self.demand["hourly_curve"][self.hour % 24]
-        lam = max(0.0, DEMAND_SCALE * self.base_qty
-                  * max(0.05, 1 + self.elast * rel) * foot * (1 + 0.5 * self.dem))
-        sold = min(self.stock, int(self.rng.poisson(lam)))
-        self.stock -= sold
-        reward = (self.price - self.cost) * sold / 10.0
-        self.hours -= 1.0
-        self.hour += 1
-        self.dem = float(np.clip(self.dem + self.rng.normal(0, 0.15), -1, 1))
-        done = self.hours <= 0 or self.stock <= 0
-        if done and self.hours <= 0 and self.stock > 0:
-            reward -= self.cost * self.stock * 2.0 / 10.0  # 2x-cost waste penalty
-        return self._state(), reward, done
-
-
-def train(episodes: int, seed: int = 1) -> QNet:
+def train(episodes: int, seed: int = 1, gamma: float = GAMMA,
+          waste_weight: float = WASTE_WEIGHT, shaping: float = SHAPING) -> QNet:
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
     demand = json.loads((DATA / "demand_model.json").read_text())
-    env = DemandEnv(demand, seed=seed)
+    env = DemandEnv(demand, seed=seed, waste_weight=waste_weight, shaping=shaping)
     net, tgt = QNet(), QNet()
     tgt.load_state_dict(net.state_dict())
     opt = torch.optim.Adam(net.parameters(), lr=LR)
@@ -119,7 +79,7 @@ def train(episodes: int, seed: int = 1) -> QNet:
                 db = torch.tensor([b[4] for b in batch], dtype=torch.float32)
                 q = net(sb).gather(1, ab).squeeze(1)
                 with torch.no_grad():
-                    target = rb + GAMMA * (1 - db) * tgt(nsb).max(1).values
+                    target = rb + gamma * (1 - db) * tgt(nsb).max(1).values
                 loss = nn.functional.mse_loss(q, target)
                 opt.zero_grad()
                 loss.backward()
@@ -133,61 +93,66 @@ def train(episodes: int, seed: int = 1) -> QNet:
     return net
 
 
-def _rollout_stats(env: DemandEnv, acts) -> dict:
-    totals, sellouts, wastes, min_ratios = [], [], [], []
-    for _ in range(200):
-        s = env.reset()
-        start_stock = env.stock
-        min_ratio, done, total = 1.0, False, 0.0
-        while not done:
-            a = acts(s, env)
-            s, r, done = env.step(a)
-            total += r
-            min_ratio = min(min_ratio, env.price / env.base_price)
-        totals.append(total)
-        sellouts.append(1.0 if env.stock <= 0 else 0.0)
-        wastes.append(env.stock / max(start_stock, 1))
-        min_ratios.append(min_ratio)
-    return {"reward": round(float(np.mean(totals)), 2),
-            "sellout_rate": round(float(np.mean(sellouts)), 2),
-            "waste_rate": round(float(np.mean(wastes)), 2),
-            "avg_deepest_discount": round(1 - float(np.mean(min_ratios)), 2)}
+def _rollout_stats(env: DemandEnv, acts, n: int = 200) -> dict:
+    """Legacy alias of backend.pricing_env.rollout_stats (adds a margin key)."""
+    return rollout_stats(env, acts, n=n)
 
 
-def evaluate_dqn(net: QNet, demand: dict, seed: int = 999) -> dict:
-    env = DemandEnv(demand, seed=seed)
+def evaluate_dqn(net: QNet, demand: dict, seed: int = 999,
+                 waste_weight: float = WASTE_WEIGHT,
+                 shaping: float = SHAPING) -> dict:
+    env = DemandEnv(demand, seed=seed, waste_weight=waste_weight, shaping=shaping)
     net.eval()
     with torch.no_grad():
         return _rollout_stats(
             env, lambda s, e: int(torch.argmax(net(torch.tensor([s], dtype=torch.float32))).item()))
 
 
-def evaluate_rule(demand: dict, seed: int = 999) -> dict:
-    env = DemandEnv(demand, seed=seed)
+def evaluate_rule(demand: dict, seed: int = 999, rule_params: dict | None = None,
+                  waste_weight: float = WASTE_WEIGHT,
+                  shaping: float = SHAPING) -> dict:
+    env = DemandEnv(demand, seed=seed, waste_weight=waste_weight, shaping=shaping)
     return _rollout_stats(
-        env, lambda s, e: rule_policy(e.price / e.base_price, e.stock, e.hours, e.dem))
+        env, lambda s, e: rule_policy(e.price / e.base_price, e.stock, e.hours, e.dem,
+                                      params=rule_params))
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--episodes", type=int, default=2500)
     ap.add_argument("--seed", type=int, default=1)
+    ap.add_argument("--gamma", type=float, default=GAMMA)
+    ap.add_argument("--waste-weight", type=float, default=WASTE_WEIGHT)
+    ap.add_argument("--shaping", type=float, default=SHAPING)
     args = ap.parse_args()
     if not (DATA / "demand_model.json").exists():
         raise SystemExit("data/demand_model.json missing — run scripts.prepare_training_data first")
-    print(f"Training DQN for {args.episodes} episodes ...")
-    net = train(args.episodes, seed=args.seed)
+    print(f"Training DQN for {args.episodes} episodes "
+          f"(gamma={args.gamma} waste_weight={args.waste_weight} shaping={args.shaping}) ...")
+    net = train(args.episodes, seed=args.seed, gamma=args.gamma,
+                waste_weight=args.waste_weight, shaping=args.shaping)
     demand = json.loads((DATA / "demand_model.json").read_text())
-    dqn_stats = evaluate_dqn(net, demand)
-    rule_stats = evaluate_rule(demand)
+    dqn_stats = evaluate_dqn(net, demand, waste_weight=args.waste_weight,
+                             shaping=args.shaping)
+    rule_stats = evaluate_rule(demand, waste_weight=args.waste_weight,
+                               shaping=args.shaping)
     print(f"Eval DQN : {dqn_stats}")
     print(f"Eval rule: {rule_stats}")
-    torch.save(net.state_dict(), DATA / "dqn_weights.pt")
-    (DATA / "dqn_meta.json").write_text(json.dumps({
-        "episodes": args.episodes, "seed": args.seed, "gamma": GAMMA,
+    default_run = (args.gamma == GAMMA and args.waste_weight == WASTE_WEIGHT
+                   and args.shaping == SHAPING)
+    if default_run:
+        weights_path, meta_path = DATA / "dqn_weights.pt", DATA / "dqn_meta.json"
+    else:
+        tag = f"w{args.waste_weight:g}_g{args.gamma}_s{args.shaping:g}"
+        weights_path, meta_path = DATA / f"dqn_weights_{tag}.pt", DATA / f"dqn_meta_{tag}.json"
+        print(f"Non-default tradeoff run — main DQN files left untouched.")
+    torch.save(net.state_dict(), weights_path)
+    meta_path.write_text(json.dumps({
+        "episodes": args.episodes, "seed": args.seed, "gamma": args.gamma,
+        "waste_weight": args.waste_weight, "shaping": args.shaping,
         "eval_dqn": dqn_stats, "eval_rule": rule_stats,
         "actions": list(ACTIONS)}, indent=2))
-    print("Wrote data/dqn_weights.pt + data/dqn_meta.json")
+    print(f"Wrote {weights_path.name} + {meta_path.name}")
 
 
 if __name__ == "__main__":

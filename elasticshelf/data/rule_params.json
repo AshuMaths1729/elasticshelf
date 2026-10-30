@@ -1,0 +1,46 @@
+{
+  "method": "tuned-rule",
+  "waste_weight": 2.0,
+  "shaping": 0.0,
+  "seed": 11,
+  "trials": 80,
+  "rollouts": 100,
+  "waste_target": null,
+  "baseline": {
+    "reward": 5.47,
+    "margin": 7.15,
+    "sellout_rate": 0.83,
+    "waste_rate": 0.05,
+    "avg_deepest_discount": 0.28
+  },
+  "best": {
+    "params": {
+      "hrs_urgent": 14.68,
+      "hrs_soon": 39.915,
+      "hrs_watch": 55.134,
+      "stock_big": 50.0,
+      "dem_gain": 0.301,
+      "hi_thresh": 3.365,
+      "lo_thresh": 1.974,
+      "recover_thresh": -0.75
+    },
+    "stats": {
+      "reward": 10.11,
+      "margin": 11.15,
+      "sellout_rate": 0.87,
+      "waste_rate": 0.04,
+      "avg_deepest_discount": 0.23
+    }
+  },
+  "best_constrained": null,
+  "params": {
+    "hrs_urgent": 14.68,
+    "hrs_soon": 39.915,
+    "hrs_watch": 55.134,
+    "stock_big": 50.0,
+    "dem_gain": 0.301,
+    "hi_thresh": 3.365,
+    "lo_thresh": 1.974,
+    "recover_thresh": -0.75
+  }
+}

@@ -22,6 +22,29 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
 FRONTEND_DIR = BASE_DIR / "frontend"
 
+
+def _load_dotenv(path: Path) -> None:
+    """Minimal .env loader (stdlib-only). Real environment wins; inline
+    ` # comments` are stripped; missing file is silently skipped."""
+    try:
+        text = path.read_text()
+    except OSError:
+        return
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, val = line.partition("=")
+        key, val = key.strip(), val.strip()
+        if " #" in val and not val.startswith(("'", '"')):
+            val = val.split(" #", 1)[0].rstrip()
+        val = val.strip().strip("\"'")
+        if key and key not in os.environ:
+            os.environ[key] = val
+
+
+_load_dotenv(BASE_DIR / ".env")
+
 app = FastAPI(title="ElasticShelf MVP", version="0.1.0")
 store = Store(store_id=os.getenv("STORE_ID", "ST-4092"))
 sim = Simulator(store)
