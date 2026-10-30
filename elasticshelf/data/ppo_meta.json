@@ -1,0 +1,39 @@
+{
+  "algorithm": "ppo",
+  "iterations": 300,
+  "rollout_steps": 2048,
+  "seed": 1,
+  "gamma": 0.95,
+  "gae_lambda": 0.95,
+  "clip": 0.2,
+  "lr": 0.003,
+  "waste_weight": 2.0,
+  "shaping": 0.0,
+  "eval_ppo": {
+    "reward": 8.77,
+    "margin": 12.1,
+    "sellout_rate": 0.62,
+    "waste_rate": 0.11,
+    "avg_deepest_discount": 0.24
+  },
+  "eval_rule": {
+    "reward": 6.92,
+    "margin": 7.96,
+    "sellout_rate": 0.84,
+    "waste_rate": 0.04,
+    "avg_deepest_discount": 0.28
+  },
+  "eval_dqn": {
+    "reward": 8.26,
+    "margin": 14.68,
+    "sellout_rate": 0.53,
+    "waste_rate": 0.15,
+    "avg_deepest_discount": 0.14
+  },
+  "actions": [
+    -0.1,
+    -0.05,
+    0.0,
+    0.05
+  ]
+}

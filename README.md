@@ -90,6 +90,7 @@ No retraining needed — pick a policy with `ELASTICITY_POLICY`:
 | `rule` | transparent thresholds | legacy urgency-score policy |
 | `tuned-rule` | `data/rule_params.json` | random-searched thresholds, served from file |
 | `mpc` | model-predictive rollout | one-step lookahead on the fitted demand model; `ELASTICITY_WASTE_WEIGHT` tunes margin↔waste live |
+| `ppo` | trained PPO actor-critic | `data/ppo_weights.pt` (see below); falls back to rules (`ppo-rules-fallback`) if torch/weights missing |
 
 `scripts/tune_rule.py` searches rule thresholds on the exact DQN training
 dynamics (`backend/pricing_env.py`, shared with `train_dqn.py`), so results
@@ -115,6 +116,42 @@ lower waste (4% vs 12%), while MPC wins when waste is cheap and the tuned
 rule wins when waste is expensive. The `policy` field on each `pricing`
 event records which backend priced that SKU (`pytorch-dqn`, `rule-tuned`,
 `mpc-w2`, …).
+
+## PPO (experimental alternative to DQN)
+
+`scripts/train_ppo.py` trains a Proximal Policy Optimization actor-critic
+(shared-trunk MLP 4→64→64 with policy + value heads, clipped surrogate,
+GAE λ=0.95) on the *same* `DemandEnv`, reward, and held-out evaluation as
+the DQN, so `data/ppo_meta.json` reports PPO vs rule vs DQN `rollout_stats`
+on identical seeds (reward, margin, sellout, waste, deepest discount):
+
+```
+python -m scripts.train_ppo --iterations 300   # writes data/ppo_weights.pt + data/ppo_meta.json (shipped weights)
+ELASTICITY_POLICY=ppo uvicorn backend.main:app --port 8000
+python -m tests.test_ppo
+```
+
+Where PPO is expected to help vs the DQN/rules (confirmed or refuted by
+each retrain's `ppo_meta.json` comparison): stabler on-policy updates on
+this small 4-state/4-action problem, smoother exploration of the
+markdown-vs-hold tradeoff via a stochastic policy, and no replay buffer /
+target network to tune. Where it may not: sample efficiency (the DQN
+reuses replay) and the tuned rule's low waste rate — PPO should only
+replace the default if it beats tuned-rule on reward *and* waste.
+
+Latest eval (`data/ppo_meta.json`, 300 iterations, same `rollout_stats`
+run for all three):
+
+| Policy | Reward | Margin | Sellout | Waste | Deepest discount |
+|---|---|---|---|---|---|
+| PPO | **+8.77** | 12.10 | 62% | 11% | 24% |
+| DQN | +8.26 | **14.68** | 53% | 15% | 14% |
+| Default rule | +6.92 | 7.96 | 84% | **4%** | 28% |
+
+PPO edges the DQN on reward with less waste and deeper sell-through, but
+still trails the tuned rule (+10.11 reward / 4% waste in
+`data/rule_params.json`) — so PPO ships as opt-in, not the default.
+Next levers: `--waste-weight` retrains, entropy/LR, more iterations.
 
 ## Context engine
 

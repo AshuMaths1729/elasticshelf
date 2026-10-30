@@ -14,6 +14,10 @@ Opt-in policies for margin-vs-waste control (no retraining needed):
 - policy="tuned-rule" — rule with data/rule_params.json (scripts/tune_rule.py).
 - policy="mpc"        — model-predictive rollout on the fitted demand model;
                         waste_weight tunes the tradeoff live.
+- policy="ppo"        — Proximal Policy Optimization actor-critic
+                        (scripts/train_ppo.py, data/ppo_weights.pt); falls
+                        back to the transparent rule policy when torch or
+                        trained weights are unavailable.
   Select via ElasticityEngine(policy=...) or the ELASTICITY_POLICY /
   ELASTICITY_WASTE_WEIGHT env vars. Default "auto" keeps legacy behavior.
 """
@@ -27,6 +31,7 @@ from typing import Dict, List, Optional, Tuple
 
 ACTIONS = (-0.10, -0.05, 0.0, 0.05)
 WEIGHTS_PATH = Path(__file__).resolve().parent.parent / "data" / "dqn_weights.pt"
+PPO_WEIGHTS_PATH = Path(__file__).resolve().parent.parent / "data" / "ppo_weights.pt"
 RULE_PARAMS_PATH = Path(__file__).resolve().parent.parent / "data" / "rule_params.json"
 DEMAND_PATH = Path(__file__).resolve().parent.parent / "data" / "demand_model.json"
 
@@ -213,6 +218,32 @@ if HAS_TORCH:
         def forward(self, x):
             return self.net(x)
 
+    class ActorCritic(nn.Module):
+        """PPO actor-critic: shared trunk, policy (logits) + value heads.
+
+        Same 4-dim state / 4-action space as the DQN so PPO, DQN, rules,
+        tuned-rule and MPC are directly comparable on DemandEnv rollouts.
+        Trained by scripts/train_ppo.py; served when policy="ppo".
+        """
+
+        def __init__(self) -> None:
+            super().__init__()
+            self.trunk = nn.Sequential(
+                nn.Linear(4, 64), nn.ReLU(),
+                nn.Linear(64, 64), nn.ReLU(),
+            )
+            self.policy_head = nn.Linear(64, 4)
+            self.value_head = nn.Linear(64, 1)
+
+        def forward(self, x):
+            h = self.trunk(x)
+            return self.policy_head(h), self.value_head(h).squeeze(-1)
+
+        def act_greedy(self, state) -> int:
+            with torch.no_grad():
+                logits, _ = self(torch.tensor([state], dtype=torch.float32))
+                return int(torch.argmax(logits, dim=1).item())
+
     def _train_qnet(epochs: int = 60) -> "QNet":
         """Distill the rule policy into the MLP on synthetic states."""
         import random
@@ -268,6 +299,7 @@ class ElasticityEngine:
             self._rule_params = dict(RULE_DEFAULTS)
         self.backend = "rules"
         self._net = None
+        self._ppo_net = None
         if self._policy in ("auto", "dqn"):
             if HAS_TORCH:
                 try:
@@ -286,6 +318,20 @@ class ElasticityEngine:
             self.backend = "mpc"
         elif self._policy == "tuned-rule":
             self.backend = "rules-tuned"
+        elif self._policy == "ppo":
+            if HAS_TORCH:
+                try:
+                    if PPO_WEIGHTS_PATH.exists():
+                        self._ppo_net = ActorCritic()
+                        self._ppo_net.load_state_dict(
+                            torch.load(PPO_WEIGHTS_PATH, map_location="cpu"))
+                        self._ppo_net.eval()
+                        self.backend = "pytorch-ppo"
+                    else:
+                        self.backend = "ppo-rules-fallback"
+                except Exception:
+                    self._ppo_net = None
+                    self.backend = "ppo-rules-fallback"
 
     def decide(self, current_price: float, base_price: float, cost_basis: float,
                stock: int, hours_to_expiry: float, demand_mod: float,
@@ -311,6 +357,10 @@ class ElasticityEngine:
             action = rule_policy(price_ratio, stock, hours_to_expiry, demand_mod,
                                  params=self._rule_params)
             note = "rule-tuned" if self._policy == "tuned-rule" else "rule-policy"
+        elif self._policy == "ppo" and self._ppo_net is not None:
+            action = self._ppo_net.act_greedy(
+                state_features(price_ratio, stock, hours_to_expiry, demand_mod))
+            note = "pytorch-ppo"
         elif self._net is not None:
             with torch.no_grad():
                 q = self._net(torch.tensor([state_features(price_ratio, stock, hours_to_expiry, demand_mod)],
@@ -319,7 +369,7 @@ class ElasticityEngine:
             note = self.backend
         else:
             action = rule_policy(price_ratio, stock, hours_to_expiry, demand_mod)
-            note = "rule-policy"
+            note = "ppo-rules-fallback" if self._policy == "ppo" else "rule-policy"
         # Cent-safe bounds: never below cost, never above 1.5x base.
         floor = math.ceil(cost_basis * 100 - 1e-9) / 100
         cap = math.floor(base_price * 1.5 * 100 + 1e-9) / 100
