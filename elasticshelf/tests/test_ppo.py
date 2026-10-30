@@ -96,6 +96,24 @@ def test_never_increases_and_expired_never_repriced():
                 (policy, p2, a2, note2)
 
 
+def test_expiry_ladder_forces_markdown():
+    """Waste-minimisation ladder: near expiry the engine markdowns even
+    when the underlying policy would hold (all policies, served level)."""
+    from backend.elasticity import ElasticityEngine
+    for policy in ("ppo", "rule", "tuned-rule", "mpc", "dqn"):
+        e = ElasticityEngine(policy=policy)
+        # 20h left, calm demand: ladder forces a markdown below current.
+        p, a, _ = e.decide(10.0, 10.0, 5.0, 10, 20, 0.8)
+        assert a == 0 and p < 10.0, (policy, p, a)
+        # 40h left with heavy stock: at least -5%.
+        p, a, _ = e.decide(10.0, 10.0, 5.0, 40, 40, 0.8)
+        assert a in (0, 1) and p < 10.0, (policy, p, a)
+        # Far from expiry with light stock: ladder does not force anything
+        # (price may hold, but per markdown-only it may never rise).
+        p, a, _ = e.decide(10.0, 10.0, 5.0, 5, 100, 0.0)
+        assert p <= 10.0, (policy, p)
+
+
 def test_gae_shapes():
     if not _has_torch():
         return
@@ -112,5 +130,6 @@ if __name__ == "__main__":
     test_engine_ppo_bounds()
     test_ppo_short_training_runs()
     test_never_increases_and_expired_never_repriced()
+    test_expiry_ladder_forces_markdown()
     test_gae_shapes()
     print("ALL PPO TESTS PASSED")

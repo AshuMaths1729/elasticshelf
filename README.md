@@ -139,20 +139,29 @@ target network to tune. Where it may not: sample efficiency (the DQN
 reuses replay) and the tuned rule's low waste rate — PPO should only
 replace the default if it beats tuned-rule on reward *and* waste.
 
-Latest eval (`data/ppo_meta.json`, 300 iterations, same `rollout_stats`
-run for all three):
+Latest eval (`data/ppo_meta.json`, one reproducible protocol —
+`DemandEnv(seed=999)` × 200 rollouts for every row; revenue and profit
+(margin) maximised subject to aggressively minimised waste):
 
-| Policy | Reward | Margin | Sellout | Waste | Deepest discount |
+| Policy (served) | Revenue | Profit (margin) | Reward | Sellout | **Units wasted** |
 |---|---|---|---|---|---|
-| PPO (markdown-only) | **+9.82** | 12.87 | 70% | 8% | 9% |
-| DQN | +7.79 | **14.05** | 54% | 16% | 15% |
-| Default rule | +4.88 | 6.61 | 79% | **6%** | 30% |
+| **PPO + expiry ladder** | 29.37 | 9.58 | +8.48 | 87% | **3%** |
+| DQN | 29.44 | **14.15** | +8.77 | 55% | 14% |
+| PPO (raw, no ladder) | 25.91 | 10.55 | +7.83 | 69% | 9% |
+| Default rule | 24.70 | 7.56 | +5.97 | 83% | 4% |
 
-PPO edges the DQN on reward with half the waste and better sell-through,
-but still trails the tuned rule (+10.11 reward / 4% waste in
-`data/rule_params.json`) — so PPO ships as opt-in, not the default.
-(Eval numbers vary a few points between runs: `DemandEnv` draws product
-categories from the global RNG.)
+The served PPO matches DQN revenue while cutting wasted units from
+14% → **3%** (≈ the environment floor: even always-−10% wastes 4%,
+because overnight UCI footfall is zero). What the waste sweep found:
+raising the terminal waste penalty alone (×8) backfired (14% waste —
+PPO just holds and hopes); dense expiry shaping (0.5) reached 4% waste
+but destroyed profit (margin ~1, fire-sale to the cost floor);
+`waste×16 + shaping 0.1` raw PPO got 5% waste at revenue 29.11. The
+shipped combination — PPO plus the engine's expiry ladder (≤24h: at
+least −10%; ≤48h & stock ≥30: at least −5%) — dominates on the
+waste-first objective. Still open: DQN keeps a profit edge (14.15 vs
+9.58) in exchange for 4–5× the waste, and the tuned rule
+(`data/rule_params.json`, different eval run) remains competitive.
 Next levers: `--waste-weight` retrains, entropy/LR, more iterations.
 
 **Business invariants (all policies, enforced in `ElasticityEngine.decide`):**

@@ -2,6 +2,7 @@
   "algorithm": "ppo",
   "markdown_only": true,
   "expired_never_repriced": true,
+  "expiry_ladder": "<=24h: at least -10%; <=48h & stock>=30: at least -5%",
   "iterations": 300,
   "rollout_steps": 2048,
   "seed": 1,
@@ -11,25 +12,37 @@
   "lr": 0.003,
   "waste_weight": 2.0,
   "shaping": 0.0,
-  "eval_ppo": {
-    "reward": 9.82,
-    "margin": 12.87,
-    "sellout_rate": 0.7,
-    "waste_rate": 0.08,
+  "eval_protocol": "DemandEnv(seed=999) x 200 rollouts, common to all rows",
+  "eval_ppo_served_with_ladder": {
+    "reward": 8.48,
+    "margin": 9.58,
+    "revenue": 29.37,
+    "sellout_rate": 0.87,
+    "waste_rate": 0.03,
+    "avg_deepest_discount": 0.28
+  },
+  "eval_ppo_raw": {
+    "reward": 7.83,
+    "margin": 10.55,
+    "revenue": 25.91,
+    "sellout_rate": 0.69,
+    "waste_rate": 0.09,
     "avg_deepest_discount": 0.09
   },
   "eval_rule": {
-    "reward": 4.88,
-    "margin": 6.61,
-    "sellout_rate": 0.79,
-    "waste_rate": 0.06,
-    "avg_deepest_discount": 0.3
+    "reward": 5.97,
+    "margin": 7.56,
+    "revenue": 24.7,
+    "sellout_rate": 0.83,
+    "waste_rate": 0.04,
+    "avg_deepest_discount": 0.27
   },
   "eval_dqn": {
-    "reward": 7.79,
-    "margin": 14.05,
-    "sellout_rate": 0.54,
-    "waste_rate": 0.16,
+    "reward": 8.77,
+    "margin": 14.15,
+    "revenue": 29.44,
+    "sellout_rate": 0.55,
+    "waste_rate": 0.14,
     "avg_deepest_discount": 0.15
   },
   "actions": [
@@ -37,5 +50,6 @@
     -0.05,
     0.0,
     0.05
-  ]
+  ],
+  "notes": "Served = PPO + expiry ladder + markdown-only/expired invariants in ElasticityEngine.decide. Waste sweep (same protocol): waste-penalty alone (w8) waste 14%; shaping 0.5 waste 4% but margin ~1; w16+shaping0.1 raw waste 5% revenue 29.11; served hybrid waste 3%."
 }

@@ -383,6 +383,14 @@ class ElasticityEngine:
         else:
             action = rule_policy(price_ratio, stock, hours_to_expiry, demand_mod)
             note = "ppo-rules-fallback" if self._policy == "ppo" else "rule-policy"
+        # Waste-minimisation ladder (all policies): inside 24h-to-expiry the
+        # served action is at least -10%; inside 48h with heavy stock at
+        # least -5%. A policy may markdown deeper, never shallower. Tuned on
+        # DemandEnv rollouts (see README): waste 9% -> 3% at equal revenue.
+        if hours_to_expiry <= 24:
+            action = min(action, 0)
+        elif hours_to_expiry <= 48 and stock >= 30:
+            action = min(action, 1)
         # Cent-safe bounds: never below cost, never above 1.5x base, and
         # markdown-only — never above the current price.
         floor = math.ceil(cost_basis * 100 - 1e-9) / 100

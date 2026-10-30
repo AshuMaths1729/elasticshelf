@@ -41,7 +41,9 @@ class DemandEnv:
 
     def reset(self):
         cats = list(self.demand["categories"].keys())
-        self.cat = random.choice(cats)
+        # Use the env's own seeded RNG (was: global random.choice, which made
+        # rollouts non-reproducible and cross-policy comparisons noisy).
+        self.cat = cats[int(self.rng.integers(0, len(cats)))]
         p = self.demand["categories"][self.cat]
         self.base_qty = p["base_qty"]
         self.elast = p["elasticity"]
@@ -54,6 +56,7 @@ class DemandEnv:
         self.hour = int(self.rng.integers(0, 24))
         self.dem = float(self.rng.uniform(-0.5, 0.5))
         self.last_margin = 0.0
+        self.last_revenue = 0.0
         return self._state()
 
     def _state(self):
@@ -71,6 +74,7 @@ class DemandEnv:
         self.stock -= sold
         margin = (self.price - self.cost) * sold / 10.0
         self.last_margin = margin
+        self.last_revenue = self.price * sold / 10.0
         reward = margin
         if self.shaping > 0 and self.stock > 0 and self.hours > 1:
             reward -= self.shaping * (self.stock / self.hours) * (self.cost / 10.0)
@@ -85,24 +89,27 @@ class DemandEnv:
 
 def rollout_stats(env: DemandEnv, acts: Callable, n: int = 200) -> Dict:
     """Roll out `acts(state, env) -> action` n times; summarize margin/waste."""
-    totals, margins, sellouts, wastes, min_ratios = [], [], [], [], []
+    totals, margins, revenues, sellouts, wastes, min_ratios = [], [], [], [], [], []
     for _ in range(n):
         s = env.reset()
         start_stock = env.stock
-        min_ratio, done, total, margin = 1.0, False, 0.0, 0.0
+        min_ratio, done, total, margin, revenue = 1.0, False, 0.0, 0.0, 0.0
         while not done:
             a = acts(s, env)
             s, r, done = env.step(a)
             total += r
             margin += env.last_margin
+            revenue += env.last_revenue
             min_ratio = min(min_ratio, env.price / env.base_price)
         totals.append(total)
         margins.append(margin)
+        revenues.append(revenue)
         sellouts.append(1.0 if env.stock <= 0 else 0.0)
         wastes.append(env.stock / max(start_stock, 1))
         min_ratios.append(min_ratio)
     return {"reward": round(float(np.mean(totals)), 2),
             "margin": round(float(np.mean(margins)), 2),
+            "revenue": round(float(np.mean(revenues)), 2),
             "sellout_rate": round(float(np.mean(sellouts)), 2),
             "waste_rate": round(float(np.mean(wastes)), 2),
             "avg_deepest_discount": round(1 - float(np.mean(min_ratios)), 2)}

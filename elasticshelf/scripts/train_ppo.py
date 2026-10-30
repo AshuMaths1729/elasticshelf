@@ -210,6 +210,7 @@ def main() -> None:
     torch.save(net.state_dict(), weights_path)
     meta_path.write_text(json.dumps({
         "algorithm": "ppo", "markdown_only": True, "expired_never_repriced": True,
+        "expiry_ladder": "<=24h: at least -10%; <=48h & stock>=30: at least -5% (served, in ElasticityEngine)",
         "iterations": args.iterations,
         "rollout_steps": args.rollout_steps, "seed": args.seed, "gamma": args.gamma,
         "gae_lambda": GAE_LAMBDA, "clip": args.clip, "lr": args.lr,
