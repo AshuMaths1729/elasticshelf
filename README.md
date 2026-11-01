@@ -111,6 +111,37 @@ flowchart TD
 
 ## Quickstart
 
+### Option A — One-Command Launcher (`./start.sh`)
+
+Run [`start.sh`](start.sh) from the repository root to initialize the environment, seed data, start the server, and open the storefront in your browser with a single command:
+
+```bash
+# Execute directly: runs all 5 setup steps, starts server & opens browser
+./start.sh
+
+# Or source it (works in both zsh and bash) to keep .venv activated in your terminal after Ctrl-C
+source start.sh
+```
+
+**What `./start.sh` automates (`[1/5]` → `[5/5]`):**
+1. **`[1/5]` Virtual Environment:** Creates `elasticshelf/.venv` via `python3 -m venv` if missing.
+2. **`[2/5]` Activation & Dependencies:** Activates `elasticshelf/.venv` and installs `elasticshelf/requirements.txt` (hashes `requirements.txt` with SHA-256 at `elasticshelf/.venv/.requirements.sha` so repeat runs skip `pip install` when unchanged).
+3. **`[3/5]` Environment Config:** Copies `elasticshelf/.env.example` → `elasticshelf/.env` if missing.
+4. **`[4/5]` Data Seeding:** Seeds `data/catalog.json` (`python -m scripts.generate_synthetic`) and `data/weather.json` (`python -m scripts.fetch_open_data`) if missing or empty.
+5. **`[5/5]` Server & Browser Launch:** Starts Uvicorn (`backend.main:app`) on `http://127.0.0.1:8000`, polls `/api/v1/sim/status` until ready, opens the default browser (`open` on macOS, `xdg-open` on Linux, `start` on Windows), and cleanly terminates the server on `Ctrl-C`.
+
+| Flag | Description |
+|---|---|
+| `--port PORT` | Port to bind (default: `8000`, or `$PORT`) |
+| `--host HOST` | Host to bind (default: `127.0.0.1`, or `$HOST`) |
+| `--no-browser` | Start the server without opening a browser tab |
+| `--seed` | Force re-seeding `data/catalog.json` and `data/weather.json` |
+| `--reinstall` | Force reinstalling `requirements.txt` packages |
+| `--skip-install` | Skip the `pip` dependency check/install step |
+| `-h`, `--help` | Show launcher usage and flags |
+
+### Option B — Manual Setup
+
 ```bash
 cd elasticshelf
 python3 -m venv .venv
@@ -222,6 +253,7 @@ python -m scripts.tune_rule --sweep 0.5,1,2,4,8 --include-mpc    # writes data/r
 ## Project Layout
 
 ```text
+start.sh               # One-command launcher: venv setup, pip cache, .env init, data seeding, uvicorn + browser
 elasticshelf/
   backend/
     main.py            # FastAPI app, REST routes, WebSocket broadcaster, .env loader
