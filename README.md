@@ -83,11 +83,11 @@ flowchart TD
    - **Store Hours:** Trading is gated by `open_hour` and `close_hour` (default `09:00–22:00`, configurable live in the UI, supporting overnight wrap such as `20:00–02:00`). Closed ticks skip POS sales and repricing.
 
 3. **Dual-World POS Demand, Paired Counterfactual Draws & Net Profit Chart**
-   - While open, footfall is computed from the time-of-day curve modulated by rain penalties ($\ge 1\text{mm} \times 0.88$, $\ge 5\text{mm} \times 0.70$) and local events (stadium match surge $\times 1.30$, food festival diversion $\times 0.75$).
-   - **Live Store (With Tool):** Draws price-elastic sales per SKU where discounts lift demand and price hikes curb it, plus a $1.4\times$ urgency boost within 24h of expiry. Individual sales are bundled into checkout tickets (`pos_feed`).
+   - While open, footfall is computed from the time-of-day curve modulated by rain penalties (`≥ 1mm × 0.88`, `≥ 5mm × 0.70`) and local events (stadium match surge `× 1.30`, food festival diversion `× 0.75`).
+   - **Live Store (With Tool):** Draws price-elastic sales per SKU where discounts lift demand and price hikes curb it, plus a `1.4×` urgency boost within 24h of expiry. Individual sales are bundled into checkout tickets (`pos_feed`).
    - **Counterfactual Twin (No Tool) with Paired Shopper Draws:** Shadows the exact same catalog and restocks at fixed `base_price`. Both worlds share the **same unit-exponential shopper arrival draw** (`draws[item.sku]`) per SKU per tick (Common Random Numbers), eliminating RNG variance so every dollar of difference in revenue and waste comes strictly from the pricing policy.
-   - **Net Profit Over No-Tool:** Both worlds track revenue and waste costs (`waste_cost = wasted_units × cost_basis`), and the **Net profit** card displays $\text{Net Profit} = (\text{Tool Revenue} - \text{No-Tool Revenue}) + (\text{No-Tool Waste Cost} - \text{Tool Waste Cost})$ (`no-tool revenue vs revenue + waste cost saved`) — showing how waste cost savings outweigh any revenue dip from markdowns.
-   - **Dual-Scale Live Trend Chart:** Every tick appends `{tick, profit, waste_avoided}` to `sim.history`, rendered in the **Net Profit & Waste Avoided** SVG line chart above `Store Context` (`renderTrendChart` in `frontend/app.js`) with a shared time X-axis (`t0h` → `t{tick}h`) and independent auto-scaling left (`$`) and right (`units`) Y-axes.
+   - **Net Profit Over No-Tool:** Both worlds track revenue and waste costs (`waste_cost = wasted_units × cost_basis`), and the **Net profit** card displays `Net Profit = (Tool Revenue − No-Tool Revenue) + (No-Tool Waste Cost − Tool Waste Cost)` (`no-tool revenue vs revenue + waste cost saved`) — showing how waste cost savings outweigh any revenue dip from markdowns.
+   - **Dual-Scale Live Trend Chart:** Every tick appends `{tick, profit, waste_avoided}` to `sim.history`, rendered in the **Net Profit & Waste Avoided** SVG line chart above `Store Context` (`renderTrendChart` in `frontend/app.js`) with a shared time X-axis (`t0h` → `t{tick}h`) and independent auto-scaling left (`USD`) and right (`units`) Y-axes.
 
 4. **Contextual Demand Assessment (Retrieval + Fast Per-Tick Scorer / Optional Muse Call)**
    - During `evaluate_pricing()`, `ContextEngine.retrieve()` scores the in-memory corpus of weather alerts, local events, and historical pricing notes by token overlap with the SKU's category and current conditions.
@@ -103,8 +103,8 @@ flowchart TD
    - As soon as a SKU's `quantity_on_shelf` drops to `0` (via sellout or expiration), `Simulator.note_depletion()` captures the completed batch's peak size (`depleted_from`), lifespan ticks, recent POS velocity, units sold vs. wasted, and the no-tool twin's waste on that SKU.
    - Simulation ticks and pricing evaluations run off the main FastAPI event loop via `asyncio.to_thread`, and `Simulator._record_depletions()` parallelizes simultaneous SKU depletions across a `ThreadPoolExecutor` (up to 8 workers) so live LLM calls never block UI button clicks or WebSocket messages.
    - For each newly depleted SKU, `ContextEngine.forecast_restock()` is called **once**:
-     - **Primary (Muse LLM):** Formats `RESTOCK_PROMPT_TEMPLATE` with all batch/context/waste metrics and queries `muse-spark-1.3` for `QTY:` and `REASON:` (capped at $5\times$ the previous batch, tagged `forecast_source: "llm"`).
-     - **Offline/Error Fallback (Rule):** Computes $\lceil \text{velocity} \times \text{lifespan} + \text{waste\_cover} \rceil$ (`forecast_source: "rule"`).
+     - **Primary (Muse LLM):** Formats `RESTOCK_PROMPT_TEMPLATE` with all batch/context/waste metrics and queries `muse-spark-1.3` for `QTY:` and `REASON:` (capped at `5×` the previous batch, tagged `forecast_source: "llm"`).
+     - **Offline/Error Fallback (Rule):** Computes `ceil(velocity × lifespan + waste_cover)` (`forecast_source: "rule"`).
    - The resulting suggestion and reasoning are **frozen** in `sim.depletion[sku]` so aging POS windows do not decay the recommendation. The SKU moves to the **Forecast & restock** tab (`GET /api/v1/forecast`); clicking **Restock** (`POST /api/v1/inventory/restock`) replenishes both the live store and the baseline twin (assigning a fresh `+72h` expiry if expired) and returns the SKU to the live ESL wall.
 
 ---
@@ -145,7 +145,7 @@ Open **http://127.0.0.1:8000** in your browser and press **Start** (or **Step +1
 | `SIM_TICK_SECONDS` | `2.0` | Wall-clock seconds per simulated hour tick (adjustable live) |
 | `STORE_LAT` / `STORE_LON` | `37.77` / `-122.41` | Store coordinates for `scripts/fetch_open_data.py` Open-Meteo weather fetch |
 | `ELASTICITY_POLICY` | `tuned-rule` (`.env`) / `auto` (code) | Pricing policy: `auto` \| `dqn` \| `rule` \| `tuned-rule` \| `mpc` |
-| `ELASTICITY_WASTE_WEIGHT` | `2.0` | Waste penalty weight $\lambda$ for the `mpc` policy |
+| `ELASTICITY_WASTE_WEIGHT` | `2.0` | Waste penalty weight `λ` for the `mpc` policy |
 
 ---
 
@@ -157,17 +157,17 @@ Open **http://127.0.0.1:8000** in your browser and press **Start** (or **Step +1
   - During the 2-second simulation loop, `demand_modifier` defaults to `use_llm=False` so all 24 SKUs are scored in `< 2 ms` without blocking UI buttons.
   - When called with `use_llm=True` and `MODEL_API_KEY` set, it sends a pricing-analyst prompt to `${MUSE_BASE_URL}/chat/completions` with `model=MUSE_MODEL`, `temperature=0.2`, `max_tokens=1600`, and `reasoning_effort="low"` (keeping hidden reasoning under ~0.5k tokens for ~2s latency).
 - **Deterministic Contextual Scorer (`_mock_reason`):** Pure function with zero randomness or I/O:
-  - Rain: $\ge 5\text{mm} \Rightarrow -0.45$; $\ge 1\text{mm} \Rightarrow -0.20$
-  - Footfall index: $< 0.80 \Rightarrow -0.25$; $> 1.25 \Rightarrow +0.30$
-  - Temperature by category: $\ge 30^\circ\text{C}$ lifts `drinks`/`dairy`/`produce` ($+0.25$); $< 5^\circ\text{C}$ lifts `bakery`/`prepared` ($+0.15$)
-  - Events: match/game day $+0.35$ (`snacks`/`drinks`/`prepared`) or $+0.10$; downtown festival $-0.30$
-  - Expiry urgency: $< 24\text{h} \Rightarrow -0.20$
+  - Rain: `≥ 5mm → -0.45`; `≥ 1mm → -0.20`
+  - Footfall index: `< 0.80 → -0.25`; `> 1.25 → +0.30`
+  - Temperature by category: `≥ 30°C` lifts `drinks`/`dairy`/`produce` (`+0.25`); `< 5°C` lifts `bakery`/`prepared` (`+0.15`)
+  - Events: match/game day `+0.35` (`snacks`/`drinks`/`prepared`) or `+0.10`; downtown festival `-0.30`
+  - Expiry urgency: `< 24h → -0.20`
 
 ### 2. Depletion Restock Forecast (`forecast_restock`)
 - Triggered once per depletion event with `RESTOCK_PROMPT_TEMPLATE`, passing `{sku, name, category, batch, stocked_tick, depleted_tick, lifespan, velocity, sold, wasted, sell_through, base_price, current_price, cost_basis, footfall_index, temperature_c, precipitation_mm, event, wasted_baseline}`.
 - Executed off the main asyncio loop (`asyncio.to_thread`) and parallelized across concurrent SKU depletions via `ThreadPoolExecutor` (`Simulator._record_depletions`).
-- Muse replies with `QTY: <int>` and `REASON: <sentence>`, clamped to $[0, 5 \times \text{batch}]$.
-- Offline or on API error, falls back to `_rule_restock_qty`: $\lceil \max(0, \text{velocity}) \times \max(1, \text{lifespan}) + \max(0, \text{wasted}) \rceil$.
+- Muse replies with `QTY: <int>` and `REASON: <sentence>`, clamped to `[0, 5 × batch]`.
+- Offline or on API error, falls back to `_rule_restock_qty`: `ceil(max(0, velocity) × max(1, lifespan) + max(0, wasted))`.
 
 ---
 
@@ -194,9 +194,9 @@ python -m scripts.tune_rule --trials 80                          # writes data/r
 python -m scripts.tune_rule --sweep 0.5,1,2,4,8 --include-mpc    # writes data/rule_pareto.json
 ```
 
-**Benchmark Summary ($\lambda = 2.0$, 200 held-out episodes):**
+**Benchmark Summary (`λ = 2.0`, 200 held-out episodes):**
 - **Tuned Rule (`tuned-rule`):** Reward **+9.78**, Waste **4%**
-- **MPC (`mpc`):** Reward **+8.78** (leads at $\lambda \le 1.0$ with **+13.17** at $\lambda = 0.5$)
+- **MPC (`mpc`):** Reward **+8.78** (leads at `λ ≤ 1.0` with **+13.17** at `λ = 0.5`)
 - **Trained DQN (`dqn`):** Reward **+7.09**, Sellout **66%**, Waste **15%**
 - **Default Rule (`rule`):** Reward **+7.64** (paired sweep) / **+6.42** (DQN eval seed), Waste **3%**
 
