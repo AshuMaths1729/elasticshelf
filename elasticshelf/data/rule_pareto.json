@@ -2,37 +2,37 @@
   {
     "waste_weight": 0.5,
     "rule_default": {
-      "reward": 6.73,
-      "margin": 7.15,
-      "sellout_rate": 0.83,
-      "waste_rate": 0.05,
-      "avg_deepest_discount": 0.28
+      "reward": 8.25,
+      "margin": 8.45,
+      "sellout_rate": 0.88,
+      "waste_rate": 0.04,
+      "avg_deepest_discount": 0.27
     },
     "tuned_rule": {
       "params": {
-        "hrs_urgent": 7.622,
-        "hrs_soon": 35.482,
-        "hrs_watch": 50.581,
-        "stock_big": 38.0,
-        "dem_gain": 1.487,
-        "hi_thresh": 3.133,
-        "lo_thresh": 2.418,
-        "recover_thresh": -1.791
+        "hrs_urgent": 18.995,
+        "hrs_soon": 42.55,
+        "hrs_watch": 74.497,
+        "stock_big": 42.0,
+        "dem_gain": 0.853,
+        "hi_thresh": 4.25,
+        "lo_thresh": 2.461,
+        "recover_thresh": -0.557
       },
       "stats": {
-        "reward": 11.15,
-        "margin": 11.64,
-        "sellout_rate": 0.78,
-        "waste_rate": 0.06,
-        "avg_deepest_discount": 0.18
+        "reward": 10.79,
+        "margin": 11.13,
+        "sellout_rate": 0.81,
+        "waste_rate": 0.04,
+        "avg_deepest_discount": 0.19
       }
     },
     "mpc": {
       "stats": {
-        "reward": 12.18,
-        "margin": 14.41,
-        "sellout_rate": 0.24,
-        "waste_rate": 0.24,
+        "reward": 13.17,
+        "margin": 15.13,
+        "sellout_rate": 0.23,
+        "waste_rate": 0.21,
         "avg_deepest_discount": 0.03
       }
     }
@@ -40,37 +40,37 @@
   {
     "waste_weight": 1.0,
     "rule_default": {
-      "reward": 6.31,
-      "margin": 7.15,
-      "sellout_rate": 0.83,
-      "waste_rate": 0.05,
-      "avg_deepest_discount": 0.28
+      "reward": 8.05,
+      "margin": 8.45,
+      "sellout_rate": 0.88,
+      "waste_rate": 0.04,
+      "avg_deepest_discount": 0.27
     },
     "tuned_rule": {
       "params": {
-        "hrs_urgent": 7.622,
-        "hrs_soon": 35.482,
-        "hrs_watch": 50.581,
-        "stock_big": 38.0,
-        "dem_gain": 1.487,
-        "hi_thresh": 3.133,
-        "lo_thresh": 2.418,
-        "recover_thresh": -1.791
+        "hrs_urgent": 18.995,
+        "hrs_soon": 42.55,
+        "hrs_watch": 74.497,
+        "stock_big": 42.0,
+        "dem_gain": 0.853,
+        "hi_thresh": 4.25,
+        "lo_thresh": 2.461,
+        "recover_thresh": -0.557
       },
       "stats": {
-        "reward": 10.66,
-        "margin": 11.64,
-        "sellout_rate": 0.78,
-        "waste_rate": 0.06,
-        "avg_deepest_discount": 0.18
+        "reward": 10.45,
+        "margin": 11.13,
+        "sellout_rate": 0.81,
+        "waste_rate": 0.04,
+        "avg_deepest_discount": 0.19
       }
     },
     "mpc": {
       "stats": {
-        "reward": 11.43,
-        "margin": 13.67,
-        "sellout_rate": 0.57,
-        "waste_rate": 0.13,
+        "reward": 12.41,
+        "margin": 14.28,
+        "sellout_rate": 0.62,
+        "waste_rate": 0.11,
         "avg_deepest_discount": 0.14
       }
     }
@@ -78,114 +78,114 @@
   {
     "waste_weight": 2.0,
     "rule_default": {
-      "reward": 5.47,
-      "margin": 7.15,
-      "sellout_rate": 0.83,
-      "waste_rate": 0.05,
-      "avg_deepest_discount": 0.28
+      "reward": 7.64,
+      "margin": 8.45,
+      "sellout_rate": 0.88,
+      "waste_rate": 0.04,
+      "avg_deepest_discount": 0.27
     },
     "tuned_rule": {
       "params": {
-        "hrs_urgent": 14.68,
-        "hrs_soon": 39.915,
-        "hrs_watch": 55.134,
-        "stock_big": 50.0,
-        "dem_gain": 0.301,
-        "hi_thresh": 3.365,
-        "lo_thresh": 1.974,
-        "recover_thresh": -0.75
+        "hrs_urgent": 18.995,
+        "hrs_soon": 42.55,
+        "hrs_watch": 74.497,
+        "stock_big": 42.0,
+        "dem_gain": 0.853,
+        "hi_thresh": 4.25,
+        "lo_thresh": 2.461,
+        "recover_thresh": -0.557
       },
       "stats": {
-        "reward": 10.11,
-        "margin": 11.15,
-        "sellout_rate": 0.87,
+        "reward": 9.78,
+        "margin": 11.13,
+        "sellout_rate": 0.81,
         "waste_rate": 0.04,
-        "avg_deepest_discount": 0.23
+        "avg_deepest_discount": 0.19
       }
     },
     "mpc": {
       "stats": {
-        "reward": 8.75,
-        "margin": 11.58,
-        "sellout_rate": 0.68,
-        "waste_rate": 0.08,
-        "avg_deepest_discount": 0.27
+        "reward": 8.78,
+        "margin": 11.09,
+        "sellout_rate": 0.75,
+        "waste_rate": 0.06,
+        "avg_deepest_discount": 0.28
       }
     }
   },
   {
     "waste_weight": 4.0,
     "rule_default": {
-      "reward": 3.78,
-      "margin": 7.15,
-      "sellout_rate": 0.83,
-      "waste_rate": 0.05,
-      "avg_deepest_discount": 0.28
+      "reward": 6.83,
+      "margin": 8.45,
+      "sellout_rate": 0.88,
+      "waste_rate": 0.04,
+      "avg_deepest_discount": 0.27
     },
     "tuned_rule": {
       "params": {
-        "hrs_urgent": 14.68,
-        "hrs_soon": 39.915,
-        "hrs_watch": 55.134,
-        "stock_big": 50.0,
-        "dem_gain": 0.301,
-        "hi_thresh": 3.365,
-        "lo_thresh": 1.974,
-        "recover_thresh": -0.75
+        "hrs_urgent": 18.995,
+        "hrs_soon": 42.55,
+        "hrs_watch": 74.497,
+        "stock_big": 42.0,
+        "dem_gain": 0.853,
+        "hi_thresh": 4.25,
+        "lo_thresh": 2.461,
+        "recover_thresh": -0.557
       },
       "stats": {
-        "reward": 9.08,
-        "margin": 11.15,
-        "sellout_rate": 0.87,
+        "reward": 8.42,
+        "margin": 11.13,
+        "sellout_rate": 0.81,
         "waste_rate": 0.04,
-        "avg_deepest_discount": 0.23
+        "avg_deepest_discount": 0.19
       }
     },
     "mpc": {
       "stats": {
-        "reward": 7.04,
-        "margin": 10.83,
-        "sellout_rate": 0.76,
-        "waste_rate": 0.07,
-        "avg_deepest_discount": 0.3
+        "reward": 7.4,
+        "margin": 10.66,
+        "sellout_rate": 0.74,
+        "waste_rate": 0.06,
+        "avg_deepest_discount": 0.31
       }
     }
   },
   {
     "waste_weight": 8.0,
     "rule_default": {
-      "reward": 0.41,
-      "margin": 7.15,
-      "sellout_rate": 0.83,
-      "waste_rate": 0.05,
-      "avg_deepest_discount": 0.28
+      "reward": 5.21,
+      "margin": 8.45,
+      "sellout_rate": 0.88,
+      "waste_rate": 0.04,
+      "avg_deepest_discount": 0.27
     },
     "tuned_rule": {
       "params": {
-        "hrs_urgent": 14.68,
-        "hrs_soon": 39.915,
-        "hrs_watch": 55.134,
-        "stock_big": 50.0,
-        "dem_gain": 0.301,
-        "hi_thresh": 3.365,
-        "lo_thresh": 1.974,
-        "recover_thresh": -0.75
+        "hrs_urgent": 8.879,
+        "hrs_soon": 32.153,
+        "hrs_watch": 46.147,
+        "stock_big": 35.0,
+        "dem_gain": 2.445,
+        "hi_thresh": 2.391,
+        "lo_thresh": 2.146,
+        "recover_thresh": -1.948
       },
       "stats": {
-        "reward": 7.02,
-        "margin": 11.15,
-        "sellout_rate": 0.87,
-        "waste_rate": 0.04,
-        "avg_deepest_discount": 0.23
+        "reward": 5.85,
+        "margin": 8.38,
+        "sellout_rate": 0.88,
+        "waste_rate": 0.03,
+        "avg_deepest_discount": 0.24
       }
     },
     "mpc": {
       "stats": {
-        "reward": 2.53,
-        "margin": 10.46,
-        "sellout_rate": 0.77,
+        "reward": 4.13,
+        "margin": 10.64,
+        "sellout_rate": 0.74,
         "waste_rate": 0.06,
-        "avg_deepest_discount": 0.3
+        "avg_deepest_discount": 0.31
       }
     }
   }

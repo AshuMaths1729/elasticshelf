@@ -1,11 +1,11 @@
-"""Module B: Context Engine (muse-spark-1.3-contributor + lightweight retrieval).
+"""Module B: Context Engine (Muse + lightweight retrieval).
 
 MVP behavior:
 - Keeps a small in-memory corpus of contextual docs (weather notes, events,
   historical pricing footnotes) and retrieves the most relevant ones per SKU
   with a dependency-free keyword scorer (TF-IDF when sklearn is installed).
-- Calls the configured context model (default muse-spark-1.3-contributor via
-  an OpenAI-compatible endpoint, or Groq / Together) when credentials are set.
+- Calls the configured Muse context model (default muse-spark-1.3 via the Meta
+  Model API Chat Completions endpoint) when MODEL_API_KEY is set.
 - Falls back to a deterministic mock reasoner offline so the demo always runs.
 
 The engine outputs a structured demand modifier in [-1, +1] plus a
@@ -29,12 +29,10 @@ _TOKEN = re.compile(r"[a-z0-9]+")
 
 class ContextEngine:
     def __init__(self) -> None:
-        self.provider = os.getenv("LLAMA_PROVIDER", "spark").lower()
-        self.groq_key = os.getenv("GROQ_API_KEY", "")
-        self.together_key = os.getenv("TOGETHER_API_KEY", "")
-        self.spark_key = os.getenv("SPARK_API_KEY", "")
-        self.base_url = os.getenv("LLAMA_BASE_URL", "").rstrip("/")
-        self.model = os.getenv("LLAMA_MODEL", "muse-spark-1.3-contributor")
+        self.provider = "muse"
+        self.model_key = os.getenv("MODEL_API_KEY", "")
+        self.base_url = os.getenv("MUSE_BASE_URL", "https://api.meta.ai/v1").rstrip("/")
+        self.model = os.getenv("MUSE_MODEL", "muse-spark-1.3")
         self.corpus: List[Dict] = []
         self._seed_corpus()
 
@@ -76,12 +74,13 @@ class ContextEngine:
         temperature_c: float,
         precipitation_mm: float,
         event: Optional[str],
+        use_llm: bool = False,
     ) -> Tuple[float, str, bool]:
         """Returns (modifier in [-1,1], reasoning, llm_used)."""
         query = f"{name} {category} {event or ''} temp {temperature_c} rain {precipitation_mm} footfall {footfall_index}"
         docs = self.retrieve(query)
         context = " ".join(d["text"] for d in docs)
-        if self._llm_available():
+        if use_llm and self._llm_available():
             try:
                 return self._llm_call(
                     sku, name, category, hours_to_expiry, stock,
@@ -98,15 +97,26 @@ class ContextEngine:
         return mod, why, False
 
     def _llm_available(self) -> bool:
-        if requests is None:
-            return False
-        if self.provider == "groq" and self.groq_key:
-            return True
-        if self.provider == "together" and self.together_key:
-            return True
-        if self.provider == "spark" and self.spark_key and self.base_url:
-            return True
-        return False
+        return bool(requests is not None and self.model_key and self.base_url)
+
+    def _chat_endpoint(self):
+        return (f"{self.base_url}/chat/completions",
+                {"Authorization": f"Bearer {self.model_key}"}, self.model)
+
+    def _chat(self, prompt: str) -> str:
+        url, headers, model = self._chat_endpoint()
+        resp = requests.post(url, headers=headers, json={
+            # reasoning_effort=low keeps Muse's hidden reasoning short
+            # (~0.4-0.6k tokens, ~2s per call); without it the model burns
+            # 2.7k-3.8k tokens thinking before the two-line answer lands.
+            "model": model, "temperature": 0.2, "max_tokens": 1600,
+            "reasoning_effort": "low",
+            "messages": [{"role": "user", "content": prompt}],
+        }, timeout=30)
+        resp.raise_for_status()
+        choices = resp.json().get("choices") or [{}]
+        message = choices[0].get("message") or {}
+        return message.get("content") or ""
 
     def _llm_call(self, sku, name, category, hours_to_expiry, stock,
                   footfall_index, temperature_c, precipitation_mm, event, context):
@@ -118,25 +128,7 @@ class ContextEngine:
             f"Footfall index: {footfall_index:.2f}. Temp: {temperature_c:.1f}C. Rain mm: {precipitation_mm:.1f}. "
             f"Event: {event or 'none'}. Retrieved context: {context}"
         )
-        if self.provider == "groq":
-            url = "https://api.groq.com/openai/v1/chat/completions"
-            headers = {"Authorization": f"Bearer {self.groq_key}"}
-            model = self.model
-        elif self.provider == "spark":
-            url = f"{self.base_url}/chat/completions"
-            headers = {"Authorization": f"Bearer {self.spark_key}"}
-            model = self.model
-        else:
-            url = "https://api.together.xyz/v1/chat/completions"
-            headers = {"Authorization": f"Bearer {self.together_key}"}
-            model = self.model if "llama" in self.model.lower() else "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo"
-        resp = requests.post(url, headers=headers, json={
-            "model": model, "temperature": 0.2, "max_tokens": 120,
-            "messages": [{"role": "user", "content": prompt}],
-        }, timeout=15)
-        resp.raise_for_status()
-        text = resp.json()["choices"][0]["message"]["content"]
-        mod, reason = self._parse_llm(text)
+        mod, reason = self._parse_llm(self._chat(prompt))
         return mod, reason, True
 
     @staticmethod
@@ -150,7 +142,72 @@ class ContextEngine:
                     mod = max(-1.0, min(1.0, float(nums[0])))
             if line.upper().startswith("REASON"):
                 reason = line.split(":", 1)[-1].strip()[:220]
-        return mod, reason or "LLaMA demand assessment applied."
+        return mod, reason or "Muse demand assessment applied."
+
+    # -- restock forecast (Muse LLM primary, rule fallback) ---------------
+    RESTOCK_PROMPT_TEMPLATE = (
+        "You are ElasticShelf, a grocery replenishment analyst. Reply with exactly two lines:\n"
+        "QTY: <non-negative integer: units to order>\n"
+        "REASON: <one short sentence>\n\n"
+        "SKU: {sku} ({name}, {category}).\n"
+        "LAST_BATCH: {batch} units, stocked tick {stocked_tick}, depleted tick {depleted_tick} "
+        "(lifespan {lifespan} ticks).\n"
+        "VELOCITY: {velocity} units/tick over recent history.\n"
+        "SOLD: {sold} units. WASTED: {wasted} units (sell-through {sell_through}).\n"
+        "PRICE: base {base_price}, last {current_price}, cost {cost_basis}.\n"
+        "CONTEXT NOW: footfall {footfall_index}, temp {temperature_c}C, "
+        "rain {precipitation_mm}mm, event: {event}.\n"
+        "NO_TOOL_WASTED: {wasted_baseline} units (what static pricing lost on this SKU).\n\n"
+        "Order enough to cover a similar lifespan at the current run-rate, "
+        "adjusted for waste risk, margin headroom, and context."
+    )
+
+    @staticmethod
+    def _rule_restock_qty(velocity: float, lifespan_ticks: int, waste_cover: int) -> int:
+        return math.ceil(max(0.0, velocity) * max(1, lifespan_ticks) + max(0, waste_cover))
+
+    @classmethod
+    def _restock_prompt(cls, **kw) -> str:
+        sold, wasted = kw["sold"], kw["wasted"]
+        filled = dict(kw)
+        filled["event"] = kw["event"] or "none"
+        filled["lifespan"] = max(1, kw["depleted_tick"] - kw.get("stocked_tick", 0))
+        filled["sell_through"] = f"{sold / max(1, sold + wasted):.0%}"
+        return cls.RESTOCK_PROMPT_TEMPLATE.format(**filled)
+
+    @staticmethod
+    def _parse_forecast(text: str) -> Tuple[int, str]:
+        qty = 0
+        reason = text.strip().replace("\n", " ")[:220]
+        for raw in text.splitlines():
+            stripped = raw.strip()
+            bare = stripped.lstrip("*# ").upper()
+            if bare.startswith("QTY"):
+                nums = re.findall(r"-?\d+", stripped)
+                if nums:
+                    qty = max(0, int(nums[0]))
+            if bare.startswith("REASON"):
+                reason = stripped.split(":", 1)[-1].strip().strip("* ")[:220]
+        return qty, reason or "LLM restock forecast applied."
+
+    def forecast_restock(self, **kw) -> Tuple[int, str, str]:
+        """Predict a restock qty with Muse. Returns (qty, reasoning, source)
+        where source is "llm" or "rule". Offline or on model error the rule
+        (velocity x lifespan + waste cover) keeps a forecast available;
+        LLM answers are capped at 5x the last batch."""
+        lifespan = max(1, kw["depleted_tick"] - kw.get("stocked_tick", 0))
+        rule_qty = self._rule_restock_qty(kw["velocity"], lifespan, kw["wasted"])
+        if not self._llm_available():
+            return rule_qty, (f"Rule: {kw['velocity']}/tick x {lifespan} ticks "
+                              f"+ {kw['wasted']} waste cover."), "rule"
+        try:
+            qty, reason = self._parse_forecast(self._chat(self._restock_prompt(**kw)))
+        except Exception as exc:
+            return rule_qty, f"Rule fallback (LLM error: {exc}).", "rule"
+        cap = 5 * max(kw["batch"], 1)
+        if qty > cap:
+            return cap, reason + " (capped at 5x last batch).", "llm"
+        return qty, reason, "llm"
 
     # -- deterministic mock (offline-safe) -------------------------------
     @staticmethod

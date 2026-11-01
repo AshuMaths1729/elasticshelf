@@ -23,6 +23,12 @@ class InventorySyncIn(BaseModel):
     items: List[InventoryItemIn]
 
 
+class RestockIn(BaseModel):
+    sku: str
+    quantity: int = Field(gt=0)
+    expiration_timestamp: Optional[datetime] = None
+
+
 class InventoryItem(BaseModel):
     sku: str
     name: str
@@ -56,7 +62,8 @@ class ContextSnapshot(BaseModel):
     temperature_c: float
     precipitation_mm: float
     event: Optional[str] = None
-    demand_modifier: float = 0.0  # -1..+1 from LLaMA/mock
+    demand_modifier: float = 0.0  # -1..+1 from Muse/mock
+    weather_source: str = "walk"  # "forecast" when the Open-Meteo series drives the sim
 
 
 class SimStatus(BaseModel):
@@ -66,11 +73,25 @@ class SimStatus(BaseModel):
     tick_seconds: float
     store_id: str
     skus: int
+    active_skus: int = 0
+    store_open: bool = True
+    open_hour: int = 9
+    close_hour: int = 22
     revenue: float
     units_sold: int
     units_wasted: int
+    revenue_baseline: float = 0.0
+    units_wasted_baseline: int = 0
+    profit: float = 0.0
+    profit_baseline: float = 0.0
+    markdown_cost: float = 0.0
+    waste_cost: float = 0.0
+    waste_cost_baseline: float = 0.0
+    history: List[Dict] = []
 
 
 class SimControl(BaseModel):
     tick_seconds: Optional[float] = None
     hours_per_tick: Optional[float] = None
+    open_hour: Optional[int] = None
+    close_hour: Optional[int] = None

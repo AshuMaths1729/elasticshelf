@@ -10,8 +10,11 @@ leftover stock, plus an optional dense expiry-risk shaping term:
     reward = margin - waste_weight * cost * leftover / 10   (terminal only)
              - shaping * stock / hours_left * cost / 10      (every step)
 
-Defaults (waste_weight=2.0, shaping=0.0) reproduce DQN training exactly.
-Rule tuning and MPC evaluation import from here so they never need torch.
+The demand modifier follows a persistent AR(1) process, so demand regimes
+(slump/surge) last long enough to react to — an agent that ignores it leaves
+money on the table. Defaults (waste_weight=2.0, shaping=0.0) reproduce DQN
+training exactly. Rule tuning and MPC evaluation import from here so they
+never need torch.
 """
 from __future__ import annotations
 
@@ -52,7 +55,7 @@ class DemandEnv:
         # Feasible cover: hours scale with stock (no doomed 55-units-in-8h draws).
         self.hours = float(np.clip(self.stock * self.rng.uniform(0.8, 2.5), 12, 120))
         self.hour = int(self.rng.integers(0, 24))
-        self.dem = float(self.rng.uniform(-0.5, 0.5))
+        self.dem = float(self.rng.uniform(-1.0, 1.0))
         self.last_margin = 0.0
         return self._state()
 
@@ -76,7 +79,7 @@ class DemandEnv:
             reward -= self.shaping * (self.stock / self.hours) * (self.cost / 10.0)
         self.hours -= 1.0
         self.hour += 1
-        self.dem = float(np.clip(self.dem + self.rng.normal(0, 0.15), -1, 1))
+        self.dem = float(np.clip(0.92 * self.dem + self.rng.normal(0, 0.12), -1, 1))
         done = self.hours <= 0 or self.stock <= 0
         if done and self.hours <= 0 and self.stock > 0:
             reward -= self.waste_weight * self.cost * self.stock / 10.0

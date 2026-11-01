@@ -7,40 +7,40 @@
   "rollouts": 100,
   "waste_target": null,
   "baseline": {
-    "reward": 5.47,
-    "margin": 7.15,
-    "sellout_rate": 0.83,
-    "waste_rate": 0.05,
-    "avg_deepest_discount": 0.28
+    "reward": 7.64,
+    "margin": 8.45,
+    "sellout_rate": 0.88,
+    "waste_rate": 0.04,
+    "avg_deepest_discount": 0.27
   },
   "best": {
     "params": {
-      "hrs_urgent": 14.68,
-      "hrs_soon": 39.915,
-      "hrs_watch": 55.134,
-      "stock_big": 50.0,
-      "dem_gain": 0.301,
-      "hi_thresh": 3.365,
-      "lo_thresh": 1.974,
-      "recover_thresh": -0.75
+      "hrs_urgent": 18.995,
+      "hrs_soon": 42.55,
+      "hrs_watch": 74.497,
+      "stock_big": 42.0,
+      "dem_gain": 0.853,
+      "hi_thresh": 4.25,
+      "lo_thresh": 2.461,
+      "recover_thresh": -0.557
     },
     "stats": {
-      "reward": 10.11,
-      "margin": 11.15,
-      "sellout_rate": 0.87,
+      "reward": 9.78,
+      "margin": 11.13,
+      "sellout_rate": 0.81,
       "waste_rate": 0.04,
-      "avg_deepest_discount": 0.23
+      "avg_deepest_discount": 0.19
     }
   },
   "best_constrained": null,
   "params": {
-    "hrs_urgent": 14.68,
-    "hrs_soon": 39.915,
-    "hrs_watch": 55.134,
-    "stock_big": 50.0,
-    "dem_gain": 0.301,
-    "hi_thresh": 3.365,
-    "lo_thresh": 1.974,
-    "recover_thresh": -0.75
+    "hrs_urgent": 18.995,
+    "hrs_soon": 42.55,
+    "hrs_watch": 74.497,
+    "stock_big": 42.0,
+    "dem_gain": 0.853,
+    "hi_thresh": 4.25,
+    "lo_thresh": 2.461,
+    "recover_thresh": -0.557
   }
 }
