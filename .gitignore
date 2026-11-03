@@ -10,6 +10,7 @@ __pycache__/
 # Large re-downloadable artifacts (scripts fetch these)
 elasticshelf/data/uci_online_retail.xlsx
 elasticshelf/data/_uci_download.tmp
+demo-video/
 
 # macOS
 .DS_Store
