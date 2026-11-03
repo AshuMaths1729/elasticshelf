@@ -356,20 +356,23 @@ class ElasticityEngine:
                             torch.load(PPO_WEIGHTS_PATH, map_location="cpu"))
                         self._ppo_net.eval()
                         self.backend = "pytorch-ppo"
-                    live_path = Path(os.getenv("ELASTICITY_PPO_LIVE_WEIGHTS",
-                                               str(PPO_LIVE_WEIGHTS_PATH)))
-                    if (os.getenv("ELASTICITY_PPO_LIVE", "0") != "0"
-                            and live_path.exists()):
-                        self._ppo_live_net = ActorCritic(LIVE_STATE_DIM)
-                        self._ppo_live_net.load_state_dict(
-                            torch.load(live_path, map_location="cpu"))
-                        self._ppo_live_net.eval()
-                        self.backend = "pytorch-ppo-live"
                     else:
                         self.backend = "ppo-rules-fallback"
                 except Exception:
                     self._ppo_net = None
                     self.backend = "ppo-rules-fallback"
+                # Opt-in live-trained PPO; a load failure keeps the 4-dim one.
+                live_path = Path(os.getenv("ELASTICITY_PPO_LIVE_WEIGHTS",
+                                           str(PPO_LIVE_WEIGHTS_PATH)))
+                if os.getenv("ELASTICITY_PPO_LIVE", "0") != "0" and live_path.exists():
+                    try:
+                        self._ppo_live_net = ActorCritic(LIVE_STATE_DIM)
+                        self._ppo_live_net.load_state_dict(
+                            torch.load(live_path, map_location="cpu"))
+                        self._ppo_live_net.eval()
+                        self.backend = "pytorch-ppo-live"
+                    except Exception:
+                        self._ppo_live_net = None
 
     @property
     def wants_live_state(self) -> bool:

@@ -138,7 +138,9 @@ def test_live_ppo_opt_in_serving():
         print("  (skip: torch or live weights missing)")
         return
     os.environ.pop("ELASTICITY_PPO_LIVE", None)
-    assert not E.ElasticityEngine(policy="ppo").wants_live_state  # default off
+    d = E.ElasticityEngine(policy="ppo")
+    assert not d.wants_live_state  # default off
+    assert d.backend == "pytorch-ppo", d.backend  # label must not say fallback
     os.environ["ELASTICITY_PPO_LIVE"] = "1"
     try:
         e = E.ElasticityEngine(policy="ppo")
