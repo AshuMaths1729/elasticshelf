@@ -336,6 +336,42 @@ with a shared pool, pricing mostly *reallocates* demand — the
 remaining waste is bounded by total footfall vs stock/expiry
 schedule, i.e. an ordering problem (see adversarial results).
 
+**Re-tuned for the store-hours setup (after merging `main`).** `main`
+added opening hours (09–22, zero footfall while closed) and a static-price
+baseline twin. Under that setup the early ladder became a fire-sale: PPO,
+DQN and tuned-rule were all served identically (the ladder + spacing chose
+every price) and lost ~$430 of profit vs. hold. Changes in the live
+simulator:
+(1) policies and the ladder see **selling hours** to expiry (open hours
+only, `Simulator.selling_hours_until`) — PPO was trained on a 24h-trading
+env, so clock hours overstated time left to sell; (2) **no repricing while
+closed**, including via `POST /pricing/evaluate`; (3) the serve-time ladder
+is configurable (`ELASTICITY_WASTE_LADDER=early|standard|late|off`,
+`ELASTICITY_MARKDOWN_SPACING`, `ELASTICITY_SELLING_HOURS`) and the default
+was re-selected on 10 held-out seeds (selection on 5 others):
+
+| Live config (PPO unless noted, 10 held-out seeds) | Units wasted | Revenue | Profit | Net gain vs baseline |
+|---|---|---|---|---|
+| Hold (no repricing) | 40.3% | $3,084 | $255 | +11 |
+| early ladder, clock hours (previous default) | 33.8% | $2,589 | −$240 | −321 |
+| **late ladder (≤12h −10%, ≤24h & stock≥30 −5%), 6-tick spacing, selling hours (new default)** | **32.5%** | **$3,015** | **$186** | **+89** |
+| standard ladder, 3-tick spacing, clock hours | 32.3% | $2,837 | $8 | −83 |
+| DQN, standard / 3 / clock | 31.2% | $2,859 | $29 | +14 |
+
+With the new default PPO is no longer masked by the ladder (tuned-rule and
+DQN on the same config: −218 / −167 net gain). Seed s.e. on profit is
+±30–40, so the remaining gaps between the top rows are within noise. The
+cost of waste reduction is still real: −8 pts waste costs ~$70 profit vs.
+hold. Reproduce by sweeping `Simulator.waste_ladder`,
+`.markdown_spacing`, `.selling_hours` on a catalog built by
+`scripts.generate_synthetic.build_catalog(sim.sim_time)`.
+
+**Stale catalog fix.** `data/catalog.json` holds absolute expiries from
+generation time while the sim clock restarts at today 09:00, so an old
+catalog started with ~10/24 SKUs already expired. `_load_seed_catalog`
+now shifts all expiries by one delta so `CATALOG_SPEC` hours-to-expiry
+hold relative to `sim.sim_time`.
+
 **Business invariants (all policies, enforced in `ElasticityEngine.decide`):**
 prices are *markdown-only* — the +5% action is masked for PPO in training
 and at serve time, and clamped to hold for DQN/rule/MPC — and expired

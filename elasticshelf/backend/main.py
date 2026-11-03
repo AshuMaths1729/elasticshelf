@@ -53,11 +53,30 @@ _loop_task = None
 
 
 # -- startup data --------------------------------------------------------
+def _reanchor_expiries(rows: List[InventoryItem]) -> List[InventoryItem]:
+    """catalog.json stores absolute expiries from when it was generated, but
+    the sim clock restarts at today 09:00 — a catalog generated days ago
+    would start with most SKUs already expired. Shift every expiry by one
+    delta so the generator's hours-to-expiry hold relative to sim_time."""
+    from datetime import timedelta
+    from scripts.generate_synthetic import CATALOG_SPEC
+    spec_hrs = {sku: hrs for sku, *_, hrs in CATALOG_SPEC}
+    deltas = sorted(sim.sim_time + timedelta(hours=spec_hrs[r.sku]) - r.expiration_timestamp
+                    for r in rows if r.sku in spec_hrs)
+    if not deltas:
+        return rows
+    delta = deltas[len(deltas) // 2]
+    for r in rows:
+        r.expiration_timestamp = r.expiration_timestamp + delta
+    return rows
+
+
 def _load_seed_catalog() -> None:
     catalog = DATA_DIR / "catalog.json"
     if catalog.exists():
-        for row in json.loads(catalog.read_text()):
-            store.upsert(InventoryItem(**row))
+        rows = [InventoryItem(**row) for row in json.loads(catalog.read_text())]
+        for item in _reanchor_expiries(rows):
+            store.upsert(item)
         return
     # Minimal fallback so the API works before scripts are run.
     from datetime import timedelta, timezone

@@ -395,14 +395,15 @@ class ElasticityEngine:
         # markdowns to one per 6 ticks. In this hourly-step env the same
         # early ladder fire-sales (revenue -22% for -0.9pt waste), so it
         # is NOT the default here.
-        if waste_ladder == "early":
-            deep_h, wide_h, wide_stock = 36.0, 96.0, 25
-        else:
-            deep_h, wide_h, wide_stock = 24.0, 48.0, 30
-        if hours_to_expiry <= deep_h:
-            action = min(action, 0)
-        elif hours_to_expiry <= wide_h and stock >= wide_stock:
-            action = min(action, 1)
+        ladders = {"early": (36.0, 96.0, 25), "standard": (24.0, 48.0, 30),
+                   "late": (12.0, 24.0, 30), "off": None}
+        ladder = ladders.get(waste_ladder, ladders["standard"])
+        if ladder is not None:
+            deep_h, wide_h, wide_stock = ladder
+            if hours_to_expiry <= deep_h:
+                action = min(action, 0)
+            elif hours_to_expiry <= wide_h and stock >= wide_stock:
+                action = min(action, 1)
         # Cent-safe bounds: never below cost+5%, never above 1.5x base, and
         # markdown-only — never above the current price.
         floor = math.ceil(cost_basis * 1.05 * 100 - 1e-9) / 100

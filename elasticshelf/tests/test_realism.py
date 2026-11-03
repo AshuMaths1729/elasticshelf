@@ -52,9 +52,74 @@ def test_rollout_reports_unit_weighted_waste():
     assert s["waste_units_rate"] > 0.3, s  # short-dated + hold = doomed
 
 
+def _hours_sim():
+    from backend.simulator import Simulator
+    from backend.store import Store
+    sim = Simulator(Store(store_id="T"), seed=1)
+    sim.open_hour, sim.close_hour = 9, 22
+    return sim
+
+
+def test_selling_hours_skip_closed_time():
+    """Policy clock = open hours to expiry (store trades 9-22)."""
+    from datetime import timedelta
+    sim = _hours_sim()  # sim_time is 09:00
+    assert sim.selling_hours_until(sim.sim_time + timedelta(hours=10)) == 10
+    # 09:00 -> next day 09:00: 13 open hours, 11 closed.
+    assert sim.selling_hours_until(sim.sim_time + timedelta(hours=24)) == 13
+    assert sim.selling_hours_until(sim.sim_time - timedelta(hours=1)) == 0
+    sim.open_hour = sim.close_hour = 0  # 24h store
+    assert sim.selling_hours_until(sim.sim_time + timedelta(hours=24)) == 24
+
+
+def test_no_repricing_while_closed():
+    """evaluate_pricing (also the /pricing/evaluate endpoint) holds every
+    price while closed: zero footfall, a markdown would only burn spacing."""
+    from datetime import timedelta
+    from backend.models import InventoryItem
+    sim = _hours_sim()
+    sim.sim_time = sim.sim_time.replace(hour=23)
+    sim.store.upsert(InventoryItem(
+        sku="A", name="A", category="dairy", quantity_on_shelf=40,
+        base_price=10.0, current_price=10.0, cost_basis=5.0,
+        expiration_timestamp=sim.sim_time + timedelta(hours=8)))
+    res = sim.evaluate_pricing()
+    assert res["status"] == "closed" and res["updates_pushed"] == 0
+    assert sim.store.get("A").current_price == 10.0
+
+
+def test_late_ladder_and_off():
+    from backend.elasticity import ElasticityEngine
+    e = ElasticityEngine(policy="rule")
+    # late ladder: <=12h forces at least -10%.
+    p, a, _ = e.decide(10.0, 10.0, 5.0, 10, 10, 0.8, waste_ladder="late")
+    assert a == 0 and p == 9.0, (p, a)
+    # 'off' leaves the policy's own choice (rule holds safe stock).
+    p, a, _ = e.decide(10.0, 10.0, 5.0, 10, 100, 0.8, waste_ladder="off")
+    assert a == 2 and p == 10.0, (p, a)
+
+
+def test_catalog_reanchored_to_sim_clock():
+    """A stale catalog.json must not start the run with expired SKUs."""
+    from backend import main as M
+    M.store.items.clear()
+    M._load_seed_catalog()
+    from scripts.generate_synthetic import CATALOG_SPEC
+    spec = {sku: hrs for sku, *_, hrs in CATALOG_SPEC}
+    for it in M.store.all():
+        hrs = (it.expiration_timestamp - M.sim.sim_time).total_seconds() / 3600
+        assert hrs > 0, (it.sku, hrs)
+        if it.sku in spec:
+            assert abs(hrs - spec[it.sku]) < 1.0, (it.sku, hrs, spec[it.sku])
+
+
 if __name__ == "__main__":
     test_shared_pool_bounds_total_sales()
     test_margin_floor()
     test_short_dated_env_is_adversarial()
     test_rollout_reports_unit_weighted_waste()
+    test_selling_hours_skip_closed_time()
+    test_no_repricing_while_closed()
+    test_late_ladder_and_off()
+    test_catalog_reanchored_to_sim_clock()
     print("ALL REALISM TESTS PASSED")

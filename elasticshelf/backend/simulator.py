@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import random
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -75,6 +76,15 @@ class Simulator:
                                "cogs": 0.0, "waste_cost": 0.0}
         self.depletion: Dict[str, Dict] = {}
         self.stock_peak: Dict[str, int] = {}
+        # Serve-time pricing config (see evaluate_pricing). Hours fed to the
+        # policy are *selling* hours (store open) unless disabled.
+        # Defaults selected on the merged store-hours + shared-pool sim
+        # (10 held-out seeds, PPO): late ladder + 6-tick spacing + selling
+        # hours wasted 32.5% (hold 40.3%) at ~hold revenue; the old early
+        # ladder wasted 33.8% but cost ~$430 of profit.
+        self.waste_ladder = os.getenv("ELASTICITY_WASTE_LADDER", "late")
+        self.selling_hours = os.getenv("ELASTICITY_SELLING_HOURS", "1") != "0"
+        self.markdown_spacing = int(os.getenv("ELASTICITY_MARKDOWN_SPACING", "6"))
         self.stocked_tick: Dict[str, int] = {}
         self.history: List[Dict] = [{"tick": 0, "profit": 0.0, "waste_avoided": 0}]
 
@@ -154,6 +164,24 @@ class Simulator:
         if c < o:  # overnight wrap, e.g. 20 -> 02
             return h >= o or h < c
         return o <= h < c
+
+    def selling_hours_until(self, expiry: datetime) -> float:
+        """Open (trading) hours between now and `expiry`; demand is zero
+        while closed, so this is the clock the pricing policy should see."""
+        o, c = self.open_hour % 24, self.close_hour % 24
+        total = (expiry - self.sim_time).total_seconds() / 3600.0
+        if total <= 0 or o == c:
+            return max(0.0, total)
+        t, left, hours = self.sim_time, total, 0.0
+        while left > 0:
+            step = min(1.0, left)
+            h = t.hour
+            open_ = (h >= o or h < c) if c < o else (o <= h < c)
+            if open_:
+                hours += step
+            t += timedelta(hours=step)
+            left -= step
+        return hours
 
     def active_skus(self) -> int:
         return sum(1 for i in self.store.all()
@@ -508,6 +536,12 @@ class Simulator:
         ff = footfall_index if footfall_index is not None else self.footfall()
         event = event if event is not None else self.current_event()
         audit, pushes, mods = [], [], []
+        if not self.is_open:
+            # Closed: zero footfall, so a markdown sells nothing and would
+            # only burn the SKU's markdown-spacing window. Hold everything.
+            return {"status": "closed", "updates_pushed": 0,
+                    "hardware_sync_status": "acknowledged", "audit_log": [],
+                    "avg_modifier": 0.0, "engine": self.fx.backend}
         for item in self.store.all():
             hrs_left = (item.expiration_timestamp - self.sim_time).total_seconds() / 3600.0
             if hrs_left <= 0:
@@ -519,18 +553,26 @@ class Simulator:
                 item.sku, item.name, item.category, hrs_left, item.quantity_on_shelf,
                 ff, self.temperature_c, self.precipitation_mm, event)
             mods.append(mod)
+            # Policy/ladder see selling hours: PPO/DQN were trained on a
+            # 24h-trading env, so clock hours overstate time left to sell.
+            sell_h = (self.selling_hours_until(item.expiration_timestamp)
+                      if self.selling_hours else hrs_left)
+            if sell_h <= 0:
+                item.last_reasoning = (f"{reasoning} No selling hours left "
+                                       "before expiry — price held.")
+                continue
             new_price, action, policy = self.fx.decide(
                 item.current_price, item.base_price, item.cost_basis,
-                item.quantity_on_shelf, hrs_left, mod,
+                item.quantity_on_shelf, sell_h, mod,
                 category=item.category, footfall=ff, hour=self.sim_time.hour,
-                waste_ladder="early")
+                waste_ladder=self.waste_ladder)
             item.last_reasoning = reasoning
             # Markdown spacing (realism fix): at most one markdown per SKU
             # per 6 ticks, so hourly repricing cannot compound -10% steps
             # straight to the floor; only the final 6h may re-markdown
             # every tick for last-chance clearance.
-            cooled = (self.tick_count - self._last_push_tick.get(item.sku, -99)) < 6
-            if cooled and new_price < item.current_price and hrs_left > 6:
+            cooled = (self.tick_count - self._last_push_tick.get(item.sku, -99)) < self.markdown_spacing
+            if cooled and new_price < item.current_price and sell_h > 6:
                 new_price, action = item.current_price, 2
             if new_price != item.current_price:
                 self._last_push_tick[item.sku] = self.tick_count
