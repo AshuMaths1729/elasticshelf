@@ -113,6 +113,54 @@ def test_catalog_reanchored_to_sim_clock():
             assert abs(hrs - spec[it.sku]) < 1.0, (it.sku, hrs, spec[it.sku])
 
 
+def test_waste_gate_projection_and_overrides():
+    """Fluid projection flags SKUs that cannot clear; gate holds safe SKUs
+    and forces a markdown on doomed ones."""
+    from datetime import timedelta
+    from backend.models import InventoryItem
+    sim = _hours_sim()
+    mk = lambda sku, qty, hrs: InventoryItem(
+        sku=sku, name=sku, category="dairy", quantity_on_shelf=qty,
+        base_price=10.0, current_price=10.0, cost_basis=5.0,
+        expiration_timestamp=sim.sim_time + timedelta(hours=hrs))
+    sim.store.upsert(mk("SAFE", 2, 100))
+    sim.store.upsert(mk("DOOM", 500, 10))
+    proj = sim.projected_leftover()
+    assert proj["SAFE"] == 0.0 and proj["DOOM"] > 400, proj
+    sim.waste_gate, sim.gate_push, sim.gate_deep = True, 0.03, 0.4
+    assert sim._gate_overrides(sim.store.get("SAFE"), proj) == {"max_action": 2}
+    assert sim._gate_overrides(sim.store.get("DOOM"), proj) == {"min_action": 0}
+    sim.waste_gate = False
+    assert sim._gate_overrides(sim.store.get("DOOM"), proj) == {}
+
+
+def test_decide_min_max_action():
+    from backend.elasticity import ElasticityEngine
+    e = ElasticityEngine(policy="rule")
+    p, a, _ = e.decide(10.0, 10.0, 5.0, 10, 100, 0.8, waste_ladder="off", min_action=0)
+    assert a == 0 and p == 9.0, (p, a)
+    # max_action=2 blocks even the ladder's forced markdown.
+    p, a, _ = e.decide(10.0, 10.0, 5.0, 40, 5, 0.8, waste_ladder="late", max_action=2)
+    assert a == 2 and p == 10.0, (p, a)
+
+
+def test_live_profiles():
+    import os
+    from backend.simulator import Simulator
+    from backend.store import Store
+    old = os.environ.pop("ELASTICITY_LIVE_PROFILE", None)
+    try:
+        s = Simulator(Store(store_id="T"))
+        assert s.live_profile == "waste-first" and s.waste_gate and s.waste_ladder == "off"
+        os.environ["ELASTICITY_LIVE_PROFILE"] = "balanced"
+        s = Simulator(Store(store_id="T"))
+        assert not s.waste_gate and s.waste_ladder == "late" and s.markdown_spacing == 6
+    finally:
+        os.environ.pop("ELASTICITY_LIVE_PROFILE", None)
+        if old is not None:
+            os.environ["ELASTICITY_LIVE_PROFILE"] = old
+
+
 if __name__ == "__main__":
     test_shared_pool_bounds_total_sales()
     test_margin_floor()
@@ -122,4 +170,7 @@ if __name__ == "__main__":
     test_no_repricing_while_closed()
     test_late_ladder_and_off()
     test_catalog_reanchored_to_sim_clock()
+    test_waste_gate_projection_and_overrides()
+    test_decide_min_max_action()
+    test_live_profiles()
     print("ALL REALISM TESTS PASSED")

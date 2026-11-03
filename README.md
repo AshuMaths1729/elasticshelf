@@ -366,6 +366,33 @@ hold. Reproduce by sweeping `Simulator.waste_ladder`,
 `.markdown_spacing`, `.selling_hours` on a catalog built by
 `scripts.generate_synthetic.build_catalog(sim.sim_time)`.
 
+**Side-by-side vs. `main`'s method, and the waste-first profile.**
+Same catalog (`CATALOG_SPEC` anchored to the sim clock), 10 held-out
+seeds (200–209; settings chosen on seeds 1/7/42/99/123):
+
+| Pricing (served) | Simulator | Units wasted | Revenue | Profit |
+|---|---|---|---|---|
+| `main` tuned-rule, `main` code | `main` (independent per-SKU demand) | 7.6% | $4,432 | $1,603 |
+| PPO, this branch's engine | `main` (independent per-SKU demand) | 0.8% | $4,234 | $1,404 |
+| Hold prices | shared pool + store hours | 40.3% | $3,084 | $255 |
+| `main` tuned-rule serving (no ladder, 3-tick cooldown) | shared pool + store hours | 37.2% | $3,044 | $215 |
+| PPO `balanced` profile | shared pool + store hours | 32.5% | $3,015 | $186 |
+| **PPO `waste-first` profile (default)** | shared pool + store hours | **29.9%** | $2,842 | $12 |
+
+`main`'s low waste comes from its demand model (each SKU draws its own
+shoppers and a 10% markdown adds ~40% demand), not its pricing: in the
+same simulator PPO wastes less than `main`'s method in both. Under the
+shared pool even "every SKU at the floor from tick 0" wastes ~33%, so
+the remaining waste is mostly an ordering problem (stock vs. ~100
+sellable units/day). `waste-first` beats that floor by *reallocating*
+demand: `Simulator.projected_leftover` runs a fluid projection of the
+shared pool at current prices; SKUs projected to clear hold (a markdown
+there only steals shoppers), at-risk SKUs are forced to ≥ −5% / ≥ −10%.
+It trades ~$170 profit for ~22 fewer units wasted vs. `balanced`; switch
+with `ELASTICITY_LIVE_PROFILE=balanced`. A milder gate (push 0.1, 6-tick
+spacing) looked better on the selection seeds but did not hold up on
+held-out seeds (32.0%), so it is not offered.
+
 **Stale catalog fix.** `data/catalog.json` holds absolute expiries from
 generation time while the sim clock restarts at today 09:00, so an old
 catalog started with ~10/24 SKUs already expired. `_load_seed_catalog`

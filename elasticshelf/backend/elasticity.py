@@ -343,7 +343,9 @@ class ElasticityEngine:
                category: Optional[str] = None, footfall: Optional[float] = None,
                hour: Optional[int] = None, base_qty: Optional[float] = None,
                elasticity: Optional[float] = None,
-               waste_ladder: str = "standard") -> Tuple[float, int, str]:
+               waste_ladder: str = "standard",
+               min_action: Optional[int] = None,
+               max_action: Optional[int] = None) -> Tuple[float, int, str]:
         """Returns (new_price, action_idx, policy_note). Never prices below cost.
 
         Business invariants (enforced here for every policy, incl. DQN/PPO):
@@ -404,6 +406,12 @@ class ElasticityEngine:
                 action = min(action, 0)
             elif hours_to_expiry <= wide_h and stock >= wide_stock:
                 action = min(action, 1)
+        # Caller overrides (live cross-SKU waste gate): force at least a
+        # markdown of `min_action` depth, or cap at `max_action` (hold).
+        if min_action is not None:
+            action = min(action, min_action)
+        if max_action is not None:
+            action = max(action, max_action)
         # Cent-safe bounds: never below cost+5%, never above 1.5x base, and
         # markdown-only — never above the current price.
         floor = math.ceil(cost_basis * 1.05 * 100 - 1e-9) / 100

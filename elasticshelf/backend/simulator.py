@@ -76,15 +76,30 @@ class Simulator:
                                "cogs": 0.0, "waste_cost": 0.0}
         self.depletion: Dict[str, Dict] = {}
         self.stock_peak: Dict[str, int] = {}
-        # Serve-time pricing config (see evaluate_pricing). Hours fed to the
-        # policy are *selling* hours (store open) unless disabled.
-        # Defaults selected on the merged store-hours + shared-pool sim
-        # (10 held-out seeds, PPO): late ladder + 6-tick spacing + selling
-        # hours wasted 32.5% (hold 40.3%) at ~hold revenue; the old early
-        # ladder wasted 33.8% but cost ~$430 of profit.
-        self.waste_ladder = os.getenv("ELASTICITY_WASTE_LADDER", "late")
+        # Serve-time pricing config (see evaluate_pricing), chosen by
+        # ELASTICITY_LIVE_PROFILE; each ELASTICITY_* var below overrides.
+        # Selected on the merged store-hours + shared-pool sim (PPO,
+        # selection seeds {1,7,42,99,123}, reported on held-out 200-209):
+        #   waste-first: 29.9% units wasted, profit $12  (default)
+        #   balanced:    32.5% units wasted, profit $186
+        #   hold prices: 40.3% / $255; main's tuned-rule serving: 37.2% / $215
+        # policy_hours: policies/ladder see selling (store-open) hours.
+        # waste_gate: cross-SKU fluid projection of the shared pool (see
+        # projected_leftover); projected-safe SKUs hold, at-risk SKUs are
+        # forced to >= -5% (leftover/stock >= gate_push) or >= -10%
+        # (>= gate_deep) so discounts pull shoppers onto doomed stock.
+        profiles = {
+            "waste-first": dict(ladder="off", spacing=3, gate=True, push=0.03, deep=0.4),
+            "balanced": dict(ladder="late", spacing=6, gate=False, push=0.1, deep=0.4),
+        }
+        self.live_profile = os.getenv("ELASTICITY_LIVE_PROFILE", "waste-first")
+        prof = profiles.get(self.live_profile, profiles["waste-first"])
+        self.waste_ladder = os.getenv("ELASTICITY_WASTE_LADDER", prof["ladder"])
         self.selling_hours = os.getenv("ELASTICITY_SELLING_HOURS", "1") != "0"
-        self.markdown_spacing = int(os.getenv("ELASTICITY_MARKDOWN_SPACING", "6"))
+        self.markdown_spacing = int(os.getenv("ELASTICITY_MARKDOWN_SPACING", str(prof["spacing"])))
+        self.waste_gate = os.getenv("ELASTICITY_WASTE_GATE", "1" if prof["gate"] else "0") != "0"
+        self.gate_push = float(os.getenv("ELASTICITY_GATE_PUSH", str(prof["push"])))
+        self.gate_deep = float(os.getenv("ELASTICITY_GATE_DEEP", str(prof["deep"])))
         self.stocked_tick: Dict[str, int] = {}
         self.history: List[Dict] = [{"tick": 0, "profit": 0.0, "waste_avoided": 0}]
 
@@ -531,6 +546,59 @@ class Simulator:
                 self.baseline["cogs"] + qty * twin["cost"], 2)
 
     # -- pricing pipeline -----------------------------------------------
+    def _gate_overrides(self, item: InventoryItem, proj: Dict[str, float]) -> Dict:
+        if not self.waste_gate or item.sku not in proj:
+            return {}
+        ratio = proj[item.sku] / max(item.quantity_on_shelf, 1)
+        if ratio <= 0:
+            return {"max_action": 2}          # projected to clear: hold
+        if ratio >= self.gate_deep:
+            return {"min_action": 0}          # heavy leftover: >= -10%
+        if ratio >= self.gate_push:
+            return {"min_action": 1}          # some leftover: >= -5%
+        return {}
+
+    def projected_leftover(self) -> Dict[str, float]:
+        """Fluid projection of the shared shopper pool at current prices:
+        units each SKU still holds when it expires. Hour by hour over
+        open hours, expected pool = DAY_CURVE x HOURLY_SHOPPER_UNITS,
+        split by the same weights tick() uses; sold-out / expired SKUs
+        drop out so their share flows to the rest."""
+        live = {}
+        for i in self.store.all():
+            if i.quantity_on_shelf > 0 and i.expiration_timestamp > self.sim_time:
+                rel = max(-0.5, min(0.6, (i.base_price - i.current_price) / i.base_price))
+                bq, el = demand_for_category(i.category)
+                live[i.sku] = [float(i.quantity_on_shelf), i.expiration_timestamp,
+                               bq * max(0.05, 1.0 + el * rel), rel]
+        left: Dict[str, float] = {}
+        t = self.sim_time
+        o, c = self.open_hour % 24, self.close_hour % 24
+        for _ in range(24 * 14):
+            if not live:
+                break
+            for sku in [k for k, v in live.items() if v[1] <= t]:
+                left[sku] = live.pop(sku)[0]
+            if not live:
+                break
+            h = t.hour
+            is_open = o == c or ((h >= o or h < c) if c < o else (o <= h < c))
+            if is_open:
+                ws = {k: v[2] * (1.4 if (v[1] - t).total_seconds() < 86400 else 1.0)
+                      for k, v in live.items()}
+                tot = sum(ws.values())
+                lift = sum(ws[k] * live[k][3] for k in ws) / max(tot, 1e-9)
+                pool = DAY_CURVE[h] * HOURLY_SHOPPER_UNITS * max(0.7, min(1.3, 1.0 + lift))
+                for k in list(live):
+                    live[k][0] -= pool * ws[k] / tot
+                    if live[k][0] <= 0:
+                        left[k] = 0.0
+                        live.pop(k)
+            t += timedelta(hours=1)
+        for k, v in live.items():
+            left[k] = v[0]
+        return left
+
     def evaluate_pricing(self, footfall_index: Optional[float] = None,
                          event: Optional[str] = None) -> Dict:
         ff = footfall_index if footfall_index is not None else self.footfall()
@@ -542,6 +610,7 @@ class Simulator:
             return {"status": "closed", "updates_pushed": 0,
                     "hardware_sync_status": "acknowledged", "audit_log": [],
                     "avg_modifier": 0.0, "engine": self.fx.backend}
+        proj = self.projected_leftover() if self.waste_gate else {}
         for item in self.store.all():
             hrs_left = (item.expiration_timestamp - self.sim_time).total_seconds() / 3600.0
             if hrs_left <= 0:
@@ -565,7 +634,8 @@ class Simulator:
                 item.current_price, item.base_price, item.cost_basis,
                 item.quantity_on_shelf, sell_h, mod,
                 category=item.category, footfall=ff, hour=self.sim_time.hour,
-                waste_ladder=self.waste_ladder)
+                waste_ladder=self.waste_ladder,
+                **self._gate_overrides(item, proj))
             item.last_reasoning = reasoning
             # Markdown spacing (realism fix): at most one markdown per SKU
             # per 6 ticks, so hourly repricing cannot compound -10% steps
