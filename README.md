@@ -26,7 +26,7 @@ Every simulated hour (default `2s` wall-clock = `1h` sim-time), the engine steps
 
 **Raw screen capture (~0:52)** — unedited screen recording:
 
-[![Watch the raw ElasticShelf screen capture](demo/demo-recording-thumb.png)](demo/demo-recording.mov)
+[![Watch the raw ElasticShelf screen capture](demo/demo-recording-thumb.png)](https://www.youtube.com/watch?v=QdjG_TIlR-Y)
 
 The narrated film tours the live store UI (shelf labels, store context, POS feed, profit chart, forecast and restock), the overnight and tick workflow, and the models underneath (Muse context, DQN pricing, rules and MPC) — every number rendered from a real 90-tick engine run.
 
