@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from .context_engine import ContextEngine
-from .elasticity import ElasticityEngine, demand_for_category
+from .elasticity import ElasticityEngine, demand_for_category, live_state_features
 from .esl_bridge import ESLBridge
 from .models import ContextSnapshot, InventoryItem
 from .store import Store
@@ -92,8 +92,12 @@ class Simulator:
             "waste-first": dict(ladder="off", spacing=3, gate=True, push=0.03, deep=0.4),
             "balanced": dict(ladder="late", spacing=6, gate=False, push=0.1, deep=0.4),
         }
-        self.live_profile = os.getenv("ELASTICITY_LIVE_PROFILE", "waste-first")
+        # "auto" (default): the live-trained PPO, when loaded, is served
+        # bare (no ladder / gate — it was trained without them, it sees the
+        # projection in its state); every other policy gets waste-first.
+        self.live_profile = os.getenv("ELASTICITY_LIVE_PROFILE", "auto")
         prof = profiles.get(self.live_profile, profiles["waste-first"])
+        self.learned_spacing = int(os.getenv("ELASTICITY_LEARNED_SPACING", "3"))
         self.waste_ladder = os.getenv("ELASTICITY_WASTE_LADDER", prof["ladder"])
         self.selling_hours = os.getenv("ELASTICITY_SELLING_HOURS", "1") != "0"
         self.markdown_spacing = int(os.getenv("ELASTICITY_MARKDOWN_SPACING", str(prof["spacing"])))
@@ -102,6 +106,22 @@ class Simulator:
         self.gate_deep = float(os.getenv("ELASTICITY_GATE_DEEP", str(prof["deep"])))
         self.stocked_tick: Dict[str, int] = {}
         self.history: List[Dict] = [{"tick": 0, "profit": 0.0, "waste_avoided": 0}]
+        # Ordering (7-day auto-restock runs, 10 held-out seeds, PPO pricing):
+        # legacy wasted 1,038 units / profit -$1,979; sell-through @0.35
+        # wasted 379 / +$875. Target < 1 is the perishable newsvendor
+        # answer here: a wasted unit (cost ~55% of price) loses more than a
+        # missed sale earns (~45%), and footfall, not stock, caps sales.
+        # order_policy "sell-through": next order = observed sell
+        # rate per *open* hour x open hours in a fresh shelf life x
+        # order_target (censored sell-outs probe +15%); "legacy": velocity x
+        # lifespan + units wasted (orders MORE after waste). auto_restock
+        # delivers every depleted SKU's suggested order at opening time.
+        self.order_policy = os.getenv("ELASTICITY_ORDER_POLICY", "sell-through")
+        self.order_target = float(os.getenv("ELASTICITY_ORDER_TARGET", "0.35"))
+        self.auto_restock = os.getenv("ELASTICITY_AUTO_RESTOCK", "0") != "0"
+        self.shelf_life: Dict[str, float] = {}
+        self.open_ticks = 0
+        self._stocked_open: Dict[str, int] = {}
 
     # -- lifecycle ------------------------------------------------------
     def start(self) -> None:
@@ -134,6 +154,9 @@ class Simulator:
         self.stock_peak.clear()
         self.stocked_tick.clear()
         self.history = [{"tick": 0, "profit": 0.0, "waste_avoided": 0}]
+        self.shelf_life.clear()
+        self.open_ticks = 0
+        self._stocked_open.clear()
 
     # -- tick -----------------------------------------------------------
     def current_event(self) -> Optional[str]:
@@ -180,14 +203,17 @@ class Simulator:
             return h >= o or h < c
         return o <= h < c
 
-    def selling_hours_until(self, expiry: datetime) -> float:
-        """Open (trading) hours between now and `expiry`; demand is zero
-        while closed, so this is the clock the pricing policy should see."""
+    def selling_hours_until(self, expiry: datetime,
+                            start: Optional[datetime] = None) -> float:
+        """Open (trading) hours between now (or `start`) and `expiry`;
+        demand is zero while closed, so this is the clock the pricing
+        policy should see."""
         o, c = self.open_hour % 24, self.close_hour % 24
-        total = (expiry - self.sim_time).total_seconds() / 3600.0
+        t0 = start or self.sim_time
+        total = (expiry - t0).total_seconds() / 3600.0
         if total <= 0 or o == c:
             return max(0.0, total)
-        t, left, hours = self.sim_time, total, 0.0
+        t, left, hours = t0, total, 0.0
         while left > 0:
             step = min(1.0, left)
             h = t.hour
@@ -254,8 +280,19 @@ class Simulator:
         ff = self.footfall()
         event = self.current_event()
 
+        if self.is_open:
+            self.open_ticks += 1
+            if self.auto_restock and self.sim_time.hour == self.open_hour % 24:
+                self._auto_restock()
         prev_qty = {}
         for i in self.store.all():
+            if i.sku not in self.shelf_life:
+                # First sighting: remember the line's full shelf life so
+                # restocks get fresh stock, not the old batch's expiry.
+                self.shelf_life[i.sku] = max(
+                    24.0, (i.expiration_timestamp - self.sim_time).total_seconds() / 3600.0
+                    + self.hours_per_tick)
+                self._stocked_open.setdefault(i.sku, self.open_ticks)
             prev_qty[i.sku] = i.quantity_on_shelf
             self.stock_peak[i.sku] = max(self.stock_peak.get(i.sku, 0),
                                          i.quantity_on_shelf)
@@ -400,6 +437,33 @@ class Simulator:
                          "forecast_reason": dep.get("forecast_reason") if dep else None})
         return rows
 
+    def _sell_through_order(self, sku: str, sold: int, censored: bool):
+        """(qty, reason): observed sales per open hour of the last batch x
+        open hours in a fresh shelf life x order_target. A sell-out hides
+        true demand (censored), so probe up 15%; waste is never added back
+        (that would order more of what just expired)."""
+        open_h = max(1.0, (self.open_ticks - self._stocked_open.get(sku, 0))
+                     * self.hours_per_tick)
+        rate = sold / open_h * (1.15 if censored else 1.0)
+        life = self.shelf_life.get(sku, 72.0)
+        o = self.open_hour % 24
+        start = self.sim_time
+        if not self.is_open:  # delivery lands at the next opening
+            start = start.replace(minute=0, second=0, microsecond=0)
+            while start.hour != o:
+                start += timedelta(hours=1)
+        sell_h = self.selling_hours_until(start + timedelta(hours=life), start=start)
+        qty = max(0, math.ceil(rate * sell_h * self.order_target))
+        return qty, (f"Rule: sell-through, {sold} sold over {open_h:.0f} open h "
+                     f"({rate:.2f}/h{' +15% censored' if censored else ''}) x "
+                     f"{sell_h:.0f} open h of shelf life x {self.order_target:g}.")
+
+    def _auto_restock(self) -> None:
+        for sku in list(self.depletion):
+            qty = int(self.depletion[sku].get("suggested_order", 0))
+            if qty > 0 and sku in self.store.items:
+                self.restock(sku, qty)
+
     def note_depletion(self, sku: str, leftover: int) -> None:
         """Record how a SKU hit zero stock (previous batch size + short
         reason) and freeze its restock forecast: velocity and suggestion are
@@ -419,7 +483,12 @@ class Simulator:
         span, sold = self._velocity_window()
         vel = round(sold.get(sku, 0) / span, 3)
         waste_cover = leftover if hrs <= 0 else 0
+        rule = None
+        if self.order_policy == "sell-through":
+            rule = self._sell_through_order(sku, sold=batch - waste_cover,
+                                            censored=hrs > 0)
         qty, reason, source = self.ctx.forecast_restock(
+            rule=rule,
             sku=sku, name=item.name, category=item.category, batch=batch,
             stocked_tick=self.stocked_tick.get(sku, 0),
             depleted_tick=self.tick_count, velocity=vel,
@@ -462,8 +531,14 @@ class Simulator:
                                    item.quantity_on_shelf)
         if revived:
             self.stocked_tick[sku] = self.tick_count
+            self._stocked_open[sku] = self.open_ticks
         if expiration is not None:
             item.expiration_timestamp = expiration
+        elif revived and sku in self.shelf_life:
+            # A revived line is a fresh batch: its own shelf life, not the
+            # sold-out batch's remaining hours.
+            item.expiration_timestamp = self.sim_time + timedelta(hours=self.shelf_life[sku])
+            item.current_price = item.base_price
         elif (item.expiration_timestamp - self.sim_time).total_seconds() <= 0:
             item.expiration_timestamp = self.sim_time + timedelta(hours=72)
         self.baseline_restock(sku, quantity, item.expiration_timestamp)
@@ -547,7 +622,7 @@ class Simulator:
 
     # -- pricing pipeline -----------------------------------------------
     def _gate_overrides(self, item: InventoryItem, proj: Dict[str, float]) -> Dict:
-        if not self.waste_gate or item.sku not in proj:
+        if item.sku not in proj:
             return {}
         ratio = proj[item.sku] / max(item.quantity_on_shelf, 1)
         if ratio <= 0:
@@ -557,6 +632,18 @@ class Simulator:
         if ratio >= self.gate_push:
             return {"min_action": 1}          # some leftover: >= -5%
         return {}
+
+    def _rel_shares(self) -> Dict[str, float]:
+        """Each live SKU's shared-pool weight relative to the mean."""
+        ws = {}
+        for i in self.store.all():
+            hrs = (i.expiration_timestamp - self.sim_time).total_seconds() / 3600.0
+            if i.quantity_on_shelf > 0 and hrs > 0:
+                rel = max(-0.5, min(0.6, (i.base_price - i.current_price) / i.base_price))
+                bq, el = demand_for_category(i.category)
+                ws[i.sku] = bq * max(0.05, 1.0 + el * rel) * (1.4 if hrs < 24 else 1.0)
+        mean = sum(ws.values()) / max(len(ws), 1)
+        return {k: v / max(mean, 1e-9) for k, v in ws.items()}
 
     def projected_leftover(self) -> Dict[str, float]:
         """Fluid projection of the shared shopper pool at current prices:
@@ -610,7 +697,15 @@ class Simulator:
             return {"status": "closed", "updates_pushed": 0,
                     "hardware_sync_status": "acknowledged", "audit_log": [],
                     "avg_modifier": 0.0, "engine": self.fx.backend}
-        proj = self.projected_leftover() if self.waste_gate else {}
+        learned = (getattr(self.fx, "wants_live_state", False)
+                   and self.live_profile in ("auto", "learned"))
+        ladder = "off" if learned else self.waste_ladder
+        gate = self.waste_gate and not learned
+        spacing = self.learned_spacing if learned else self.markdown_spacing
+        proj = self.projected_leftover() if (gate or learned) else {}
+        shares = self._rel_shares() if learned else {}
+        close_dt = self.sim_time.replace(minute=0, second=0, microsecond=0)
+        hours_to_close = float((self.close_hour - close_dt.hour) % 24)
         for item in self.store.all():
             hrs_left = (item.expiration_timestamp - self.sim_time).total_seconds() / 3600.0
             if hrs_left <= 0:
@@ -630,20 +725,30 @@ class Simulator:
                 item.last_reasoning = (f"{reasoning} No selling hours left "
                                        "before expiry — price held.")
                 continue
+            item.last_reasoning = reasoning
+            # Markdown spacing (realism fix): at most one markdown per SKU
+            # per `spacing` ticks, so hourly repricing cannot compound -10%
+            # steps straight to the floor; only the final 6 selling hours
+            # may re-markdown every tick. Checked before the policy runs
+            # (markdown-only: a cooled SKU can only hold), so a learning
+            # policy is only asked when its action can execute.
+            cooled = (self.tick_count - self._last_push_tick.get(item.sku, -99)) < spacing
+            if cooled and sell_h > 6:
+                continue
+            kw = {}
+            if learned:
+                kw["live_state"] = live_state_features(
+                    item.current_price / max(item.base_price, 1e-6),
+                    item.quantity_on_shelf, sell_h, mod,
+                    proj.get(item.sku, 0.0) / max(item.quantity_on_shelf, 1),
+                    shares.get(item.sku, 1.0), hours_to_close)
+            elif gate:
+                kw.update(self._gate_overrides(item, proj))
             new_price, action, policy = self.fx.decide(
                 item.current_price, item.base_price, item.cost_basis,
                 item.quantity_on_shelf, sell_h, mod,
                 category=item.category, footfall=ff, hour=self.sim_time.hour,
-                waste_ladder=self.waste_ladder,
-                **self._gate_overrides(item, proj))
-            item.last_reasoning = reasoning
-            # Markdown spacing (realism fix): at most one markdown per SKU
-            # per 6 ticks, so hourly repricing cannot compound -10% steps
-            # straight to the floor; only the final 6h may re-markdown
-            # every tick for last-chance clearance.
-            cooled = (self.tick_count - self._last_push_tick.get(item.sku, -99)) < self.markdown_spacing
-            if cooled and new_price < item.current_price and sell_h > 6:
-                new_price, action = item.current_price, 2
+                waste_ladder=ladder, sku=item.sku, **kw)
             if new_price != item.current_price:
                 self._last_push_tick[item.sku] = self.tick_count
                 old = item.current_price

@@ -393,6 +393,47 @@ with `ELASTICITY_LIVE_PROFILE=balanced`. A milder gate (push 0.1, 6-tick
 spacing) looked better on the selection seeds but did not hold up on
 held-out seeds (32.0%), so it is not offered.
 
+**Joint profit + waste training and ordering.**
+*Ordering* (`Simulator.order_policy`): `main`'s rule fallback ordered
+`velocity × lifespan + units wasted` — a SKU that wasted 30 units got 30
+*more* next time. The default is now **sell-through**: units sold per
+*open* hour of the last batch × open hours in a fresh shelf life ×
+`ELASTICITY_ORDER_TARGET` (0.35; a sell-out is censored demand, so it
+probes +15%; waste is never added back). The LLM restock prompt gets this
+number as `RULE_ORDER`. Restocked lines get a fresh shelf life at base
+price. `ELASTICITY_AUTO_RESTOCK=1` delivers suggested orders at opening.
+Target < 1 is the perishable newsvendor answer here — a wasted unit
+(cost ≈ 55% of price) loses more than a missed sale earns (≈ 45%), and
+footfall, not stock, caps sales.
+
+*Pricing* (`scripts/train_ppo_live.py`): PPO trained in the live
+store-hours shared-pool simulator on a 7-dim cross-SKU state (adds
+selling hours, projected leftover / stock, relative pool share, hours to
+close) with one reward for both goals:
+`own·(margin − λ·cost·wasted) + team·(store-wide tick contribution)/N`
+(λ = 1 is exactly profit, λ > 1 adds a waste penalty; the team term
+charges a markdown for demand it only steals from other SKUs).
+Behaviour-cloned from the waste-first gate, value-head warm-up, KL-limited
+PPO; 17 runs over own∈{0,0.5,1} × team∈{0,0.5,1} × λ∈{1,2,4}. Best
+(own 0.5, team 1, λ 2) ships as `data/ppo_live_weights.pt`, **opt-in**
+(`ELASTICITY_PPO_LIVE=1`), because it only ties the hand-built gate.
+
+7-day runs with auto-restock, 10 held-out seeds (200–209):
+
+| Pricing + ordering | Units wasted | Profit |
+|---|---|---|
+| `main`'s method + `main`'s legacy ordering | 1,117 | −$1,210 |
+| PPO waste-first + legacy ordering | 1,038 | −$1,979 |
+| `main`'s method + sell-through 0.35 | 432 | $1,067 |
+| PPO balanced + sell-through 0.35 | 399 | $992 |
+| **PPO waste-first + sell-through 0.35 (default)** | **379** | $875 |
+| PPO live (joint reward) + sell-through 0.35 | 376 | $885 |
+
+Single cycle (no restock): PPO live 29.4% / $29 vs. waste-first 29.9% /
+$12 — within seed noise (s.e. ≈ 5 units, ≈ $50). Ordering is the big
+win (−64% units wasted and +$2.8k profit over 7 days vs. legacy); the
+pricing policies now differ by ±20 units / ±$100 on top of it.
+
 **Stale catalog fix.** `data/catalog.json` holds absolute expiries from
 generation time while the sim clock restarts at today 09:00, so an old
 catalog started with ~10/24 SKUs already expired. `_load_seed_catalog`

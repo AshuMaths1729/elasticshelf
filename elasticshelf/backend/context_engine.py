@@ -157,7 +157,9 @@ class ContextEngine:
         "PRICE: base {base_price}, last {current_price}, cost {cost_basis}.\n"
         "CONTEXT NOW: footfall {footfall_index}, temp {temperature_c}C, "
         "rain {precipitation_mm}mm, event: {event}.\n"
-        "NO_TOOL_WASTED: {wasted_baseline} units (what static pricing lost on this SKU).\n\n"
+        "NO_TOOL_WASTED: {wasted_baseline} units (what static pricing lost on this SKU).\n"
+        "RULE_ORDER: {rule_qty} units (sell-through rule; wasted units are "
+        "a sign of over-ordering, not demand).\n\n"
         "Order enough to cover a similar lifespan at the current run-rate, "
         "adjusted for waste risk, margin headroom, and context."
     )
@@ -173,6 +175,7 @@ class ContextEngine:
         filled["event"] = kw["event"] or "none"
         filled["lifespan"] = max(1, kw["depleted_tick"] - kw.get("stocked_tick", 0))
         filled["sell_through"] = f"{sold / max(1, sold + wasted):.0%}"
+        filled.setdefault("rule_qty", "n/a")
         return cls.RESTOCK_PROMPT_TEMPLATE.format(**filled)
 
     @staticmethod
@@ -196,10 +199,16 @@ class ContextEngine:
         (velocity x lifespan + waste cover) keeps a forecast available;
         LLM answers are capped at 5x the last batch."""
         lifespan = max(1, kw["depleted_tick"] - kw.get("stocked_tick", 0))
-        rule_qty = self._rule_restock_qty(kw["velocity"], lifespan, kw["wasted"])
+        rule = kw.pop("rule", None)  # (qty, reason) from the simulator's order policy
+        if rule is not None:
+            rule_qty, rule_reason = rule
+        else:
+            rule_qty = self._rule_restock_qty(kw["velocity"], lifespan, kw["wasted"])
+            rule_reason = (f"Rule: {kw['velocity']}/tick x {lifespan} ticks "
+                           f"+ {kw['wasted']} waste cover.")
         if not self._llm_available():
-            return rule_qty, (f"Rule: {kw['velocity']}/tick x {lifespan} ticks "
-                              f"+ {kw['wasted']} waste cover."), "rule"
+            return rule_qty, rule_reason, "rule"
+        kw["rule_qty"] = rule_qty
         try:
             qty, reason = self._parse_forecast(self._chat(self._restock_prompt(**kw)))
         except Exception as exc:

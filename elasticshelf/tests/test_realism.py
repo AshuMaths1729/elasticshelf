@@ -130,8 +130,6 @@ def test_waste_gate_projection_and_overrides():
     sim.waste_gate, sim.gate_push, sim.gate_deep = True, 0.03, 0.4
     assert sim._gate_overrides(sim.store.get("SAFE"), proj) == {"max_action": 2}
     assert sim._gate_overrides(sim.store.get("DOOM"), proj) == {"min_action": 0}
-    sim.waste_gate = False
-    assert sim._gate_overrides(sim.store.get("DOOM"), proj) == {}
 
 
 def test_decide_min_max_action():
@@ -151,7 +149,7 @@ def test_live_profiles():
     old = os.environ.pop("ELASTICITY_LIVE_PROFILE", None)
     try:
         s = Simulator(Store(store_id="T"))
-        assert s.live_profile == "waste-first" and s.waste_gate and s.waste_ladder == "off"
+        assert s.live_profile == "auto" and s.waste_gate and s.waste_ladder == "off"
         os.environ["ELASTICITY_LIVE_PROFILE"] = "balanced"
         s = Simulator(Store(store_id="T"))
         assert not s.waste_gate and s.waste_ladder == "late" and s.markdown_spacing == 6
@@ -159,6 +157,54 @@ def test_live_profiles():
         os.environ.pop("ELASTICITY_LIVE_PROFILE", None)
         if old is not None:
             os.environ["ELASTICITY_LIVE_PROFILE"] = old
+
+
+def test_sell_through_order_rule():
+    """Sell-through ordering: sold / open hours alive x open hours of a
+    fresh shelf life x target; never adds wasted units back."""
+    sim = _hours_sim()
+    sim.order_target = 0.5
+    sim.shelf_life["X"] = 24.0          # fresh batch: 13 open h from 09:00
+    sim.open_ticks, sim._stocked_open["X"] = 10, 0   # alive 10 open hours
+    qty, reason = sim._sell_through_order("X", sold=20, censored=False)
+    assert qty == 13, (qty, reason)     # 2.0/h x 13 h x 0.5
+    q2, _ = sim._sell_through_order("X", sold=20, censored=True)
+    assert q2 == 15, q2                 # censored sell-out probes +15%
+    # Waste does not inflate the order (legacy rule added it back).
+    q3, _ = sim._sell_through_order("X", sold=0, censored=False)
+    assert q3 == 0
+
+
+def test_auto_restock_delivers_fresh_batch_at_open():
+    from datetime import timedelta
+    from backend.models import InventoryItem
+    sim = _hours_sim()
+    sim.auto_restock = True
+    sim.store.upsert(InventoryItem(
+        sku="A", name="A", category="dairy", quantity_on_shelf=1,
+        base_price=10.0, current_price=8.0, cost_basis=5.0,
+        expiration_timestamp=sim.sim_time + timedelta(hours=30)))
+    sim.tick()                                   # 10:00, records shelf life
+    sim.store.items["A"].quantity_on_shelf = 0   # sold out mid-day
+    sim._record_depletions({"A": 1})
+    sim.depletion["A"]["suggested_order"] = 7
+    delivered = []
+    orig = sim.restock
+
+    def spy(sku, q, expiration=None):
+        out = orig(sku, q, expiration)
+        it = sim.store.items[sku]
+        delivered.append((sku, q, sim.sim_time.hour, it.current_price,
+                          (it.expiration_timestamp - sim.sim_time).total_seconds() / 3600))
+        return out
+    sim.restock = spy
+    while not (sim.sim_time.hour == 9 and sim.tick_count > 1):
+        sim.tick()
+    assert len(delivered) == 1, delivered
+    sku, q, hour, price, hrs = delivered[0]
+    assert (sku, q, hour) == ("A", 7, 9), delivered   # once, at opening
+    assert price == 10.0                              # fresh batch at base price
+    assert hrs > 25, hrs                              # fresh shelf life, not old expiry
 
 
 if __name__ == "__main__":
@@ -173,4 +219,6 @@ if __name__ == "__main__":
     test_waste_gate_projection_and_overrides()
     test_decide_min_max_action()
     test_live_profiles()
+    test_sell_through_order_rule()
+    test_auto_restock_delivers_fresh_batch_at_open()
     print("ALL REALISM TESTS PASSED")

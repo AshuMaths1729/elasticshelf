@@ -1,0 +1,66 @@
+{
+  "args": {
+    "waste_weight": 2.0,
+    "team_weight": 1.0,
+    "own_weight": 0.5,
+    "ent": 0.01,
+    "iterations": 60,
+    "episodes_per_iter": 6,
+    "bc_episodes": 30,
+    "value_iters": 3,
+    "lr": 0.0001,
+    "gamma": 0.95,
+    "seed": 1,
+    "no_bc": false,
+    "out": "data/ppo_live_weights.pt",
+    "meta": "data/ppo_live_meta.json"
+  },
+  "bc": {
+    "samples": 17226,
+    "accuracy": 0.955
+  },
+  "init": {
+    "wasted": 244.6,
+    "revenue": 2836.76,
+    "profit": 7.46,
+    "objective": -899.34
+  },
+  "best_selection": {
+    "wasted": 234.0,
+    "revenue": 2906.69,
+    "profit": 77.39,
+    "objective": -736.87
+  },
+  "state": "live_state_features: price/base, stock/60, selling_h/60, demand_mod, projected_leftover/stock, rel_pool_share/3, hours_to_close/13",
+  "reward": "own_weight*(margin - waste_weight*cost*wasted) + team_weight*store_tick_contribution/open_transitions, /10",
+  "selected_from": "sweep own{0,0.5,1} x team{0,0.5,1} x waste_weight{1,2,4} (17 runs), best-objective checkpoint on selection seeds 1,7,42,99,123",
+  "holdout_seeds_200_209": {
+    "single_cycle": {
+      "ppo_live": {
+        "wasted": 240.1,
+        "waste_pct": 0.294,
+        "profit": 29
+      },
+      "waste_first_gate": {
+        "wasted": 244.1,
+        "waste_pct": 0.299,
+        "profit": 12
+      }
+    },
+    "seven_day_sell_through_0.35": {
+      "ppo_live": {
+        "wasted": 376.4,
+        "profit": 885
+      },
+      "waste_first_gate": {
+        "wasted": 378.8,
+        "profit": 875
+      },
+      "balanced": {
+        "wasted": 398.9,
+        "profit": 992
+      }
+    }
+  },
+  "verdict": "ties the waste-first gate within seed noise (s.e. ~5 units, ~$50); shipped opt-in (ELASTICITY_PPO_LIVE=1), not default"
+}

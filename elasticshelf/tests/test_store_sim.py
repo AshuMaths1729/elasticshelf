@@ -448,6 +448,7 @@ def test_offline_depletion_uses_rule_formula():
     env = {"MODEL_API_KEY": ""}
     with mock.patch.dict(os.environ, env):
         sim = _sim_with([200.0, 200.0])
+        sim.order_policy = "legacy"  # main's velocity x lifespan + waste rule
         sim.tick_count = 10
         feed = lambda i, sku: {"id": f"T9-{i:02d}", "tick": 9,
                                "time": sim.sim_time.isoformat(),

@@ -128,6 +128,41 @@ def test_gae_shapes():
     assert abs(float(adv[2]) - 0.5) < 1e-6
 
 
+
+def test_live_ppo_opt_in_serving():
+    """ELASTICITY_PPO_LIVE=1 loads the live-trained 7-dim PPO; the simulator
+    then serves it in learned mode (live_state passed, no ladder/gate)."""
+    import os
+    from backend import elasticity as E
+    if not E.HAS_TORCH or not E.PPO_LIVE_WEIGHTS_PATH.exists():
+        print("  (skip: torch or live weights missing)")
+        return
+    os.environ.pop("ELASTICITY_PPO_LIVE", None)
+    assert not E.ElasticityEngine(policy="ppo").wants_live_state  # default off
+    os.environ["ELASTICITY_PPO_LIVE"] = "1"
+    try:
+        e = E.ElasticityEngine(policy="ppo")
+        assert e.wants_live_state and e.backend == "pytorch-ppo-live"
+        st = E.live_state_features(1.0, 40, 20, 0.0, 0.5, 1.0, 6)
+        p, a, note = e.decide(10.0, 10.0, 5.0, 40, 20, 0.0, live_state=st)
+        assert note == "pytorch-ppo-live" and p <= 10.0 and a in (0, 1, 2)
+        # Without live_state (single-SKU callers) it falls back to 4-dim PPO.
+        _, _, note = e.decide(10.0, 10.0, 5.0, 40, 20, 0.0)
+        assert note == "pytorch-ppo", note
+        from backend.simulator import Simulator
+        from backend.store import Store
+        from backend.models import InventoryItem
+        from datetime import timedelta
+        sim = Simulator(Store(store_id="T"), seed=1)
+        sim.fx = e
+        sim.store.upsert(InventoryItem(
+            sku="A", name="A", category="dairy", quantity_on_shelf=40,
+            base_price=10.0, current_price=10.0, cost_basis=5.0,
+            expiration_timestamp=sim.sim_time + timedelta(hours=30)))
+        sim.evaluate_pricing()   # store open at 09:00 -> learned path runs
+    finally:
+        os.environ.pop("ELASTICITY_PPO_LIVE", None)
+
 if __name__ == "__main__":
     test_actor_critic_shapes()
     test_engine_ppo_bounds()
@@ -135,4 +170,5 @@ if __name__ == "__main__":
     test_never_increases_and_expired_never_repriced()
     test_expiry_ladder_forces_markdown()
     test_gae_shapes()
+    test_live_ppo_opt_in_serving()
     print("ALL PPO TESTS PASSED")

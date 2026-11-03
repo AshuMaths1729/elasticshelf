@@ -32,6 +32,9 @@ from typing import Dict, List, Optional, Tuple
 ACTIONS = (-0.10, -0.05, 0.0, 0.05)
 WEIGHTS_PATH = Path(__file__).resolve().parent.parent / "data" / "dqn_weights.pt"
 PPO_WEIGHTS_PATH = Path(__file__).resolve().parent.parent / "data" / "ppo_weights.pt"
+# Live-trained PPO (scripts/train_ppo_live.py): 7-dim cross-SKU state, joint
+# profit + waste reward, trained in the shared-pool store-hours simulator.
+PPO_LIVE_WEIGHTS_PATH = Path(__file__).resolve().parent.parent / "data" / "ppo_live_weights.pt"
 RULE_PARAMS_PATH = Path(__file__).resolve().parent.parent / "data" / "rule_params.json"
 DEMAND_PATH = Path(__file__).resolve().parent.parent / "data" / "demand_model.json"
 
@@ -53,6 +56,25 @@ def state_features(price_ratio: float, stock: int, hours_to_expiry: float,
     hrs_n = max(0.0, min(1.0, hours_to_expiry / 120.0))
     dem = max(-1.0, min(1.0, demand_mod))
     return [price_ratio, stock_n, hrs_n, dem]
+
+
+LIVE_STATE_DIM = 7
+
+
+def live_state_features(price_ratio: float, stock: int, selling_hours: float,
+                        demand_mod: float, leftover_ratio: float,
+                        rel_share: float, hours_to_close: float) -> List[float]:
+    """Cross-SKU live state for the live-trained PPO:
+    price/base, stock, selling (open) hours to expiry, LLM demand modifier,
+    projected leftover / stock (shared-pool fluid projection), this SKU's
+    pool weight relative to the mean live SKU, and hours until close."""
+    return [max(0.2, min(1.5, price_ratio)),
+            max(0.0, min(1.0, stock / 60.0)),
+            max(0.0, min(1.0, selling_hours / 60.0)),
+            max(-1.0, min(1.0, demand_mod)),
+            max(0.0, min(1.0, leftover_ratio)),
+            max(0.0, min(1.0, rel_share / 3.0)),
+            max(0.0, min(1.0, hours_to_close / 13.0))]
 
 
 RULE_DEFAULTS: Dict[str, float] = {
@@ -226,10 +248,11 @@ if HAS_TORCH:
         Trained by scripts/train_ppo.py; served when policy="ppo".
         """
 
-        def __init__(self) -> None:
+        def __init__(self, n_in: int = 4) -> None:
             super().__init__()
+            self.n_in = n_in
             self.trunk = nn.Sequential(
-                nn.Linear(4, 64), nn.ReLU(),
+                nn.Linear(n_in, 64), nn.ReLU(),
                 nn.Linear(64, 64), nn.ReLU(),
             )
             self.policy_head = nn.Linear(64, 4)
@@ -305,6 +328,7 @@ class ElasticityEngine:
         self.backend = "rules"
         self._net = None
         self._ppo_net = None
+        self._ppo_live_net = None
         if self._policy in ("auto", "dqn"):
             if HAS_TORCH:
                 try:
@@ -332,11 +356,27 @@ class ElasticityEngine:
                             torch.load(PPO_WEIGHTS_PATH, map_location="cpu"))
                         self._ppo_net.eval()
                         self.backend = "pytorch-ppo"
+                    live_path = Path(os.getenv("ELASTICITY_PPO_LIVE_WEIGHTS",
+                                               str(PPO_LIVE_WEIGHTS_PATH)))
+                    if (os.getenv("ELASTICITY_PPO_LIVE", "0") != "0"
+                            and live_path.exists()):
+                        self._ppo_live_net = ActorCritic(LIVE_STATE_DIM)
+                        self._ppo_live_net.load_state_dict(
+                            torch.load(live_path, map_location="cpu"))
+                        self._ppo_live_net.eval()
+                        self.backend = "pytorch-ppo-live"
                     else:
                         self.backend = "ppo-rules-fallback"
                 except Exception:
                     self._ppo_net = None
                     self.backend = "ppo-rules-fallback"
+
+    @property
+    def wants_live_state(self) -> bool:
+        """True when the live-trained PPO is loaded: the simulator then
+        passes live_state (cross-SKU features) and skips the waste gate /
+        ladder the policy was trained without."""
+        return self._ppo_live_net is not None
 
     def decide(self, current_price: float, base_price: float, cost_basis: float,
                stock: int, hours_to_expiry: float, demand_mod: float,
@@ -345,7 +385,9 @@ class ElasticityEngine:
                elasticity: Optional[float] = None,
                waste_ladder: str = "standard",
                min_action: Optional[int] = None,
-               max_action: Optional[int] = None) -> Tuple[float, int, str]:
+               max_action: Optional[int] = None,
+               live_state: Optional[List[float]] = None,
+               sku: Optional[str] = None) -> Tuple[float, int, str]:
         """Returns (new_price, action_idx, policy_note). Never prices below cost.
 
         Business invariants (enforced here for every policy, incl. DQN/PPO):
@@ -375,6 +417,10 @@ class ElasticityEngine:
             action = rule_policy(price_ratio, stock, hours_to_expiry, demand_mod,
                                  params=self._rule_params)
             note = "rule-tuned" if self._policy == "tuned-rule" else "rule-policy"
+        elif (self._policy == "ppo" and self._ppo_live_net is not None
+              and live_state is not None):
+            action = self._ppo_live_net.act_greedy(live_state)
+            note = "pytorch-ppo-live"
         elif self._policy == "ppo" and self._ppo_net is not None:
             action = self._ppo_net.act_greedy(
                 state_features(price_ratio, stock, hours_to_expiry, demand_mod))
