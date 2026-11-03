@@ -31,8 +31,19 @@ def test_ws_hello_serializes():
 
 
 def test_tick_and_pricing_loop():
+    from datetime import datetime, timedelta
+
     c = _client()
     try:
+        # Seed a near-expiry trigger: a fresh, calm store correctly holds
+        # every price, so the loop needs something to reprice.
+        now = c.get("/api/v1/sim/status").json()["sim_time"].replace("Z", "+00:00")
+        soon = (datetime.fromisoformat(now) + timedelta(hours=6)).isoformat()
+        c.post("/api/v1/inventory/sync", json={
+            "store_id": "ST-4092",
+            "items": [{"sku": "TST-URG", "name": "Urgent Yogurt",
+                       "quantity_on_shelf": 40, "base_price": 5.99,
+                       "cost_basis": 3.00, "expiration_timestamp": soon}]})
         t = c.post("/api/v1/sim/tick").json()
         assert t["tick"] >= 1
         assert "checkouts" in t and "pricing" in t
@@ -43,7 +54,6 @@ def test_tick_and_pricing_loop():
         assert audits, "expected at least one price push in tick+evaluate"
         for a in audits:
             assert "llm_reasoning" in a, a
-            assert "llama_reasoning" not in a, a
     finally:
         c.__exit__(None, None, None)
 

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ElasticShelf — Live Store Simulation</title>
-<link rel="stylesheet" href="/static/styles.css">
+<link rel="stylesheet" href="/static/styles.css?v=4">
 </head>
 <body>
 <header class="topbar">
@@ -13,6 +13,7 @@
   <div class="clock">SIM <strong id="clock">—</strong> · tick <strong id="tick">0</strong></div>
   <div class="badge" id="engineBadge">engine: …</div>
   <div class="badge" id="liveBadge">paused</div>
+  <div class="badge" id="openBadge">open</div>
   <div class="controls">
     <button class="primary" id="btnToggle">Start</button>
     <button id="btnStep">Step +1h</button>
@@ -25,32 +26,66 @@
         <option value="5">5s</option>
       </select>
     </label>
+    <label title="Store opening hour (0–23 sim time). Equal open/close = 24h.">open
+      <input id="openHour" type="number" min="0" max="23" value="9">
+    </label>
+    <label title="Store closing hour (0–23 sim time). Can wrap midnight, e.g. 20–02.">close
+      <input id="closeHour" type="number" min="0" max="23" value="22">
+    </label>
   </div>
 </header>
 
 <div class="metrics">
-  <div class="metric"><div class="k">Revenue</div><div class="v good" id="mRev">$0.00</div></div>
+  <div class="metric"><div class="k">Revenue</div><div class="v good" id="mRev">$0.00</div><div class="sub" id="mRevBase">no-tool —</div></div>
+  <div class="metric" title="Net profit over no-tool = (tool revenue − no-tool revenue) + waste avoided costs."><div class="k">Net profit</div><div class="v good" id="mProfit">$0.00</div><div class="sub" id="mProfitBase">no-tool revenue vs revenue + waste cost saved</div></div>
   <div class="metric"><div class="k">Units sold</div><div class="v" id="mSold">0</div></div>
-  <div class="metric"><div class="k">Units wasted</div><div class="v bad" id="mWaste">0</div></div>
+  <div class="metric"><div class="k">Units wasted</div><div class="v bad" id="mWaste">0</div><div class="sub" id="mWasteBase">no-tool —</div></div>
   <div class="metric"><div class="k">Active SKUs</div><div class="v" id="mSkus">0</div></div>
   <div class="metric"><div class="k">Connection</div><div class="v" id="conn">…</div></div>
 </div>
 
 <main class="layout">
   <section class="panel">
-    <h2>Shelf Edge — Electronic Shelf Labels (live)</h2>
+    <div class="panel-head">
+      <h2>Shelf Edge — Electronic Shelf Labels (live)</h2>
+      <div class="tabs">
+        <button class="tab active" id="tabShelf">Shelf labels</button>
+        <button class="tab" id="tabForecast">Forecast &amp; restock</button>
+      </div>
+    </div>
     <div class="shelf-grid" id="shelf"><div class="empty">Connecting to store stream…</div></div>
+    <div id="forecast" hidden>
+      <div class="fc-note" id="fcNote">SKUs gone from the shelf — frozen demand forecast for what to buy next.</div>
+      <table class="fc-table">
+        <thead><tr><th>SKU</th><th>Was</th><th>Vel/tick</th><th>Wasted (tool)</th><th>Wasted (no-tool)</th><th>Suggest</th><th>Order</th></tr></thead>
+        <tbody id="fcBody"><tr><td colspan="7" class="empty">Loading forecast…</td></tr></tbody>
+      </table>
+    </div>
   </section>
 
   <div>
     <section class="panel">
+      <div class="chart-head">
+        <h2>Net Profit &amp; Waste Avoided</h2>
+        <div class="chart-legend">
+          <span class="leg profit"><i></i>Net profit (<b id="chProfitVal">$0.00</b>)</span>
+          <span class="leg waste"><i></i>Waste avoided (<b id="chWasteVal">0u</b>)</span>
+        </div>
+      </div>
+      <div class="chart-wrap">
+        <svg id="trendChart" viewBox="0 0 336 148" aria-label="Net profit and waste avoided over time"></svg>
+      </div>
+    </section>
+
+    <section class="panel">
       <h2>Store Context</h2>
       <div class="ctx-grid">
-        <div class="cell"><div class="k">Footfall</div><div class="v" id="cFoot">—</div></div>
-        <div class="cell"><div class="k">Temp</div><div class="v" id="cTemp">—</div></div>
-        <div class="cell"><div class="k">Rain (mm)</div><div class="v" id="cRain">—</div></div>
-        <div class="cell"><div class="k">Demand mod</div><div class="v" id="cMod">—</div></div>
+        <div class="cell" title="Shopper traffic vs an average day: 1.0 = normal, 0.5 = half, 1.5 = rush. Scales every SKU's demand."><div class="k">Footfall</div><div class="v" id="cFoot">—</div></div>
+        <div class="cell" title="Simulated outside temperature. ≥30°C lifts drinks/dairy/produce; <5°C lifts bakery/prepared."><div class="k">Temp</div><div class="v" id="cTemp">—</div></div>
+        <div class="cell" title="Rain this hour. ≥1mm softens footfall ×0.88; ≥5mm is heavy, footfall ×0.7 and demand modifier −0.45."><div class="k">Rain (mm)</div><div class="v" id="cRain">—</div></div>
+        <div class="cell" title="Average demand modifier across SKUs (−1…+1). −1 = demand collapsing, discount harder; +1 = surging, hold price."><div class="k">Demand mod</div><div class="v" id="cMod">—</div></div>
       </div>
+      <div class="ctx-legend" id="ctxLegend">Footfall 1.0 ≈ average day · Mod −1 collapse → discount, +1 surge → hold</div>
       <div class="event-banner" id="cEvent" hidden></div>
     </section>
 
@@ -67,6 +102,6 @@
 </main>
 
 <footer>ElasticShelf MVP · FastAPI + WebSocket · <span id="footEngine">engine: …</span></footer>
-<script src="/static/app.js"></script>
+<script src="/static/app.js?v=4"></script>
 </body>
 </html>

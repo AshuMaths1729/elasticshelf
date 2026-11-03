@@ -11,7 +11,7 @@ def test_shared_pool_bounds_total_sales():
     from backend import main as M
     if not M.store.items:
         M._load_seed_catalog()
-    M.sim._poisson = lambda mu: 5
+    M.sim._poisson = lambda mu, rng=None: 5
     before = M.store.units_sold
     res = M.sim.tick()
     sold = sum(line["qty"] for t in res["checkouts"] for line in t["lines"])

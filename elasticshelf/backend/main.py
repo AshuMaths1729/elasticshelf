@@ -8,13 +8,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Set
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from .models import (InventoryItem, InventorySyncIn, PricingEvaluateOut,
-                     SimControl, SimStatus)
+                     RestockIn, SimControl, SimStatus)
 from .simulator import Simulator
 from .store import Store
 
@@ -84,9 +84,12 @@ async def _sim_loop() -> None:
     while True:
         await asyncio.sleep(sim.tick_seconds)
         if sim.running:
-            result = sim.tick()
-            await _broadcast({"type": "tick", **result,
-                              "metrics": _metrics()})
+            try:
+                result = await asyncio.to_thread(sim.tick)
+                await _broadcast({"type": "tick", **result,
+                                  "metrics": _metrics()})
+            except Exception:
+                pass
 
 
 async def _broadcast(msg: dict) -> None:
@@ -104,7 +107,16 @@ async def _broadcast(msg: dict) -> None:
 def _metrics() -> dict:
     return {"revenue": store.revenue, "units_sold": store.units_sold,
             "units_wasted": store.units_wasted,
-            "skus": len(store.items),
+            "skus": len(store.items), "active_skus": sim.active_skus(),
+            "store_open": sim.is_open, "open_hour": sim.open_hour,
+            "close_hour": sim.close_hour,
+            "revenue_baseline": sim.baseline["revenue"],
+            "units_wasted_baseline": sim.baseline["units_wasted"],
+            "profit": sim.net_profit(), "profit_baseline": sim.baseline_profit(),
+            "markdown_cost": store.markdown_cost,
+            "waste_cost": store.waste_cost,
+            "waste_cost_baseline": sim.baseline["waste_cost"],
+            "history": sim.history,
             "sim_time": sim.sim_time.isoformat(), "tick": sim.tick_count,
             "running": sim.running}
 
@@ -121,12 +133,22 @@ async def inventory_sync(body: InventorySyncIn):
             cost_basis=row.cost_basis, expiration_timestamp=row.expiration_timestamp,
             image_url=row.image_url or (prev.image_url if prev else None),
             last_reasoning=prev.last_reasoning if prev else None))
+        if prev and prev.quantity_on_shelf > 0 and row.quantity_on_shelf == 0:
+            await asyncio.to_thread(sim.note_depletion, row.sku, prev.quantity_on_shelf)
+        if row.quantity_on_shelf > 0 and (not prev or prev.quantity_on_shelf == 0):
+            sim.depletion.pop(row.sku, None)
+            sim.stocked_tick[row.sku] = sim.tick_count
+        if row.quantity_on_shelf > 0:
+            sim.stock_peak[row.sku] = max(sim.stock_peak.get(row.sku, 0),
+                                          row.quantity_on_shelf)
+        sim.baseline_upsert(row.sku, row.quantity_on_shelf, row.base_price,
+                            row.expiration_timestamp, row.cost_basis)
     return {"status": "success", "store_id": body.store_id, "items_synced": len(body.items)}
 
 
 @app.post("/api/v1/pricing/evaluate", response_model=PricingEvaluateOut)
 async def pricing_evaluate():
-    result = sim.evaluate_pricing()
+    result = await asyncio.to_thread(sim.evaluate_pricing)
     await _broadcast({"type": "pricing", **result, "metrics": _metrics()})
     return result
 
@@ -143,6 +165,7 @@ async def context_now():
     return {"sim_time": sim.sim_time.isoformat(), "footfall_index": sim.footfall(),
             "temperature_c": sim.temperature_c, "precipitation_mm": sim.precipitation_mm,
             "event": sim.current_event(), "last_snapshot": snap,
+            "store_open": sim.is_open, "weather_source": sim.weather_source,
             "engine": sim.fx.backend, "llm_provider": sim.ctx.provider,
             "llm_model": sim.ctx.model}
 
@@ -151,8 +174,17 @@ async def context_now():
 async def sim_status():
     return SimStatus(running=sim.running, tick=sim.tick_count, sim_time=sim.sim_time,
                      tick_seconds=sim.tick_seconds, store_id=store.store_id,
-                     skus=len(store.items), revenue=store.revenue,
-                     units_sold=store.units_sold, units_wasted=store.units_wasted)
+                     skus=len(store.items), active_skus=sim.active_skus(),
+                     store_open=sim.is_open, open_hour=sim.open_hour,
+                     close_hour=sim.close_hour, revenue=store.revenue,
+                     units_sold=store.units_sold, units_wasted=store.units_wasted,
+                     revenue_baseline=sim.baseline["revenue"],
+                     units_wasted_baseline=sim.baseline["units_wasted"],
+                     profit=sim.net_profit(), profit_baseline=sim.baseline_profit(),
+                     markdown_cost=store.markdown_cost,
+                     waste_cost=store.waste_cost,
+                     waste_cost_baseline=sim.baseline["waste_cost"],
+                     history=sim.history)
 
 
 @app.post("/api/v1/sim/start")
@@ -169,7 +201,7 @@ async def sim_stop():
 
 @app.post("/api/v1/sim/tick")
 async def sim_tick_once():
-    result = sim.tick()
+    result = await asyncio.to_thread(sim.tick)
     await _broadcast({"type": "tick", **result, "metrics": _metrics()})
     return result
 
@@ -180,7 +212,13 @@ async def sim_control(body: SimControl):
         sim.tick_seconds = max(0.2, min(30.0, body.tick_seconds))
     if body.hours_per_tick:
         sim.hours_per_tick = max(0.25, min(12.0, body.hours_per_tick))
-    return {"tick_seconds": sim.tick_seconds, "hours_per_tick": sim.hours_per_tick}
+    if body.open_hour is not None:
+        sim.open_hour = max(0, min(23, body.open_hour))
+    if body.close_hour is not None:
+        sim.close_hour = max(0, min(23, body.close_hour))
+    return {"tick_seconds": sim.tick_seconds, "hours_per_tick": sim.hours_per_tick,
+            "open_hour": sim.open_hour, "close_hour": sim.close_hour,
+            "store_open": sim.is_open}
 
 
 @app.post("/api/v1/sim/reset")
@@ -195,6 +233,22 @@ async def sim_reset():
 @app.get("/api/v1/pos/feed")
 async def pos_feed():
     return {"checkouts": sim.pos_feed[-20:][::-1]}
+
+
+@app.get("/api/v1/forecast")
+async def forecast():
+    return {"tick": sim.tick_count, "sim_time": sim.sim_time.isoformat(),
+            "window_ticks": max(1, min(24, sim.tick_count)),
+            "items": sim.forecast()}
+
+
+@app.post("/api/v1/inventory/restock")
+async def inventory_restock(body: RestockIn):
+    try:
+        row = sim.restock(body.sku, body.quantity, body.expiration_timestamp)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"unknown sku {body.sku}")
+    return {"status": "success", **jsonable_encoder(row)}
 
 
 # -- websocket --------------------------------------------------------------

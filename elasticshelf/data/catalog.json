@@ -7,7 +7,7 @@
     "base_price": 12.99,
     "current_price": 12.99,
     "cost_basis": 8.5,
-    "expiration_timestamp": "2026-10-30T22:10:40.664927+00:00"
+    "expiration_timestamp": "2026-11-04T14:41:58.552326+00:00"
   },
   {
     "sku": "GRB-BEF-02",
@@ -17,7 +17,7 @@
     "base_price": 9.49,
     "current_price": 9.49,
     "cost_basis": 6.1,
-    "expiration_timestamp": "2026-10-29T22:10:40.664927+00:00"
+    "expiration_timestamp": "2026-11-03T14:41:58.552326+00:00"
   },
   {
     "sku": "SLM-FIL-03",
@@ -27,7 +27,7 @@
     "base_price": 15.99,
     "current_price": 15.99,
     "cost_basis": 10.2,
-    "expiration_timestamp": "2026-10-29T10:10:40.664927+00:00"
+    "expiration_timestamp": "2026-11-03T02:41:58.552326+00:00"
   },
   {
     "sku": "BRR-MIX-04",
@@ -37,7 +37,7 @@
     "base_price": 6.49,
     "current_price": 6.49,
     "cost_basis": 3.2,
-    "expiration_timestamp": "2026-10-29T04:10:40.664927+00:00"
+    "expiration_timestamp": "2026-11-02T20:41:58.552326+00:00"
   },
   {
     "sku": "AVO-HAS-05",
@@ -47,7 +47,7 @@
     "base_price": 5.99,
     "current_price": 5.99,
     "cost_basis": 2.9,
-    "expiration_timestamp": "2026-10-30T10:10:40.664927+00:00"
+    "expiration_timestamp": "2026-11-04T02:41:58.552326+00:00"
   },
   {
     "sku": "SPN-BAB-06",
@@ -57,7 +57,7 @@
     "base_price": 3.99,
     "current_price": 3.99,
     "cost_basis": 1.8,
-    "expiration_timestamp": "2026-10-29T16:10:40.664927+00:00"
+    "expiration_timestamp": "2026-11-03T08:41:58.552326+00:00"
   },
   {
     "sku": "MLK-OAT-07",
@@ -67,7 +67,7 @@
     "base_price": 4.29,
     "current_price": 4.29,
     "cost_basis": 2.4,
-    "expiration_timestamp": "2026-10-31T22:10:40.664927+00:00"
+    "expiration_timestamp": "2026-11-05T14:41:58.552326+00:00"
   },
   {
     "sku": "YGR-GRK-08",
@@ -77,7 +77,7 @@
     "base_price": 5.49,
     "current_price": 5.49,
     "cost_basis": 2.9,
-    "expiration_timestamp": "2026-10-31T10:10:40.664927+00:00"
+    "expiration_timestamp": "2026-11-05T02:41:58.552326+00:00"
   },
   {
     "sku": "CHS-CHD-09",
@@ -87,7 +87,7 @@
     "base_price": 7.29,
     "current_price": 7.29,
     "cost_basis": 4.1,
-    "expiration_timestamp": "2026-11-01T12:10:40.664927+00:00"
+    "expiration_timestamp": "2026-11-06T04:41:58.552326+00:00"
   },
   {
     "sku": "BRD-SRD-10",
@@ -97,7 +97,7 @@
     "base_price": 4.99,
     "current_price": 4.99,
     "cost_basis": 2.1,
-    "expiration_timestamp": "2026-10-28T22:10:40.664927+00:00"
+    "expiration_timestamp": "2026-11-02T14:41:58.552326+00:00"
   },
   {
     "sku": "CRS-BTR-11",
@@ -107,7 +107,7 @@
     "base_price": 5.49,
     "current_price": 5.49,
     "cost_basis": 2.3,
-    "expiration_timestamp": "2026-10-28T18:10:40.664927+00:00"
+    "expiration_timestamp": "2026-11-02T10:41:58.552326+00:00"
   },
   {
     "sku": "BAG-BLU-12",
@@ -117,7 +117,7 @@
     "base_price": 4.79,
     "current_price": 4.79,
     "cost_basis": 2.0,
-    "expiration_timestamp": "2026-10-29T14:10:40.664927+00:00"
+    "expiration_timestamp": "2026-11-03T06:41:58.552326+00:00"
   },
   {
     "sku": "SUS-SET-13",
@@ -127,7 +127,7 @@
     "base_price": 11.99,
     "current_price": 11.99,
     "cost_basis": 6.5,
-    "expiration_timestamp": "2026-10-28T12:10:40.664927+00:00"
+    "expiration_timestamp": "2026-11-02T04:41:58.552326+00:00"
   },
   {
     "sku": "SLD-CSR-14",
@@ -137,7 +137,7 @@
     "base_price": 8.49,
     "current_price": 8.49,
     "cost_basis": 4.2,
-    "expiration_timestamp": "2026-10-28T16:10:40.664927+00:00"
+    "expiration_timestamp": "2026-11-02T08:41:58.552326+00:00"
   },
   {
     "sku": "PST-PRM-15",
@@ -147,7 +147,7 @@
     "base_price": 9.99,
     "current_price": 9.99,
     "cost_basis": 5.1,
-    "expiration_timestamp": "2026-10-29T00:10:40.664927+00:00"
+    "expiration_timestamp": "2026-11-02T16:41:58.552326+00:00"
   },
   {
     "sku": "OJ-FRS-16",
@@ -157,7 +157,7 @@
     "base_price": 5.99,
     "current_price": 5.99,
     "cost_basis": 2.8,
-    "expiration_timestamp": "2026-10-30T02:10:40.664927+00:00"
+    "expiration_timestamp": "2026-11-03T18:41:58.552326+00:00"
   },
   {
     "sku": "KMB-GNG-17",
@@ -167,7 +167,7 @@
     "base_price": 4.49,
     "current_price": 4.49,
     "cost_basis": 2.1,
-    "expiration_timestamp": "2026-10-31T16:10:40.664927+00:00"
+    "expiration_timestamp": "2026-11-05T08:41:58.552326+00:00"
   },
   {
     "sku": "CHP-KE-18",
@@ -177,7 +177,7 @@
     "base_price": 3.79,
     "current_price": 3.79,
     "cost_basis": 1.6,
-    "expiration_timestamp": "2026-11-01T02:10:40.664927+00:00"
+    "expiration_timestamp": "2026-11-05T18:41:58.552326+00:00"
   },
   {
     "sku": "HUM-CLS-19",
@@ -187,7 +187,7 @@
     "base_price": 4.19,
     "current_price": 4.19,
     "cost_basis": 1.9,
-    "expiration_timestamp": "2026-10-30T16:10:40.664927+00:00"
+    "expiration_timestamp": "2026-11-04T08:41:58.552326+00:00"
   },
   {
     "sku": "EGG-FRE-20",
@@ -197,7 +197,7 @@
     "base_price": 6.99,
     "current_price": 6.99,
     "cost_basis": 3.8,
-    "expiration_timestamp": "2026-11-01T06:10:40.664927+00:00"
+    "expiration_timestamp": "2026-11-05T22:41:58.552326+00:00"
   },
   {
     "sku": "TOM-VIN-21",
@@ -207,7 +207,7 @@
     "base_price": 3.49,
     "current_price": 3.49,
     "cost_basis": 1.5,
-    "expiration_timestamp": "2026-10-29T20:10:40.664927+00:00"
+    "expiration_timestamp": "2026-11-03T12:41:58.552326+00:00"
   },
   {
     "sku": "MUS-SHI-22",
@@ -217,7 +217,7 @@
     "base_price": 4.99,
     "current_price": 4.99,
     "cost_basis": 2.4,
-    "expiration_timestamp": "2026-10-29T12:10:40.664927+00:00"
+    "expiration_timestamp": "2026-11-03T04:41:58.552326+00:00"
   },
   {
     "sku": "PRW-GRL-23",
@@ -227,7 +227,7 @@
     "base_price": 13.49,
     "current_price": 13.49,
     "cost_basis": 8.8,
-    "expiration_timestamp": "2026-10-29T02:10:40.664927+00:00"
+    "expiration_timestamp": "2026-11-02T18:41:58.552326+00:00"
   },
   {
     "sku": "CAK-CRT-24",
@@ -237,6 +237,6 @@
     "base_price": 3.99,
     "current_price": 3.99,
     "cost_basis": 1.7,
-    "expiration_timestamp": "2026-10-28T14:10:40.664927+00:00"
+    "expiration_timestamp": "2026-11-02T06:41:58.552326+00:00"
   }
 ]
