@@ -18,6 +18,26 @@ Every simulated hour (default `2s` wall-clock = `1h` sim-time), the engine steps
 
 ---
 
+## Demo Video
+
+**Narrated cut (~3:27)** — male voiceover with captions throughout:
+
+<video src="elasticshelf-demo.mp4" width="720" controls="controls" preload="metadata">
+  <a href="elasticshelf-demo.mp4">Watch the narrated cut (~3:27)</a>
+</video>
+
+**Raw screen capture (~0:52)** — unedited screen recording:
+
+<video src="demo-recording.mov" width="720" controls="controls" preload="metadata">
+  <a href="demo-recording.mov">Watch the raw screen capture (~0:52)</a>
+</video>
+
+Direct links: [narrated MP4](elasticshelf-demo.mp4) · [raw capture](demo-recording.mov)
+
+The narrated film tours the live store UI (shelf labels, store context, POS feed, profit chart, forecast and restock), the overnight and tick workflow, and the models underneath (Muse context, DQN pricing, rules and MPC) — every number rendered from a real 90-tick engine run.
+
+---
+
 ## Architecture
 
 | Module | Role | Implementation |
@@ -35,42 +55,14 @@ Every simulated hour (default `2s` wall-clock = `1h` sim-time), the engine steps
 
 ```mermaid
 flowchart TD
-    subgraph Bootstrap["1. Data & Weather Bootstrap"]
-        CAT["Seed Catalog (data/catalog.json)"]
-        WX["Open-Meteo API Forecast (data/weather.json)"]
-        DM["Fitted Demand Model (data/demand_model.json)"]
-    end
-
-    subgraph TickLoop["2. Hourly Simulation Tick (backend/simulator.py)"]
-        CLK["Advance Clock (+1h) & Step Weather (Open-Meteo series / walk fallback)"]
-        HRS{"Store Open?<br/>(open_hour..close_hour)"}
-        EXP["Book Expired Stock as Waste<br/>(Live Store + Static-Price Twin)"]
-        POS["Simulate Price-Elastic POS Sales (Live)<br/>& Base-Price Sales (No-Tool Twin)"]
-    end
-
-    subgraph Repricing["3. Context + Elasticity Pricing Pipeline"]
-        RET["Keyword Retrieval over Weather / Event / History Corpus"]
-        MUSE_MOD["Meta Muse (muse-spark-1.3) Demand Modifier [-1, +1] + Reasoning<br/>(Deterministic _mock_reason fallback offline)"]
-        ELAST["ElasticityEngine.decide()<br/>(tuned-rule / pytorch-dqn / mpc / rule)<br/>Action: -10%, -5%, 0%, +5%"]
-        GUARD["Pricing Guards: Floor = Cost, Cap = 1.5x Base,<br/>3-Tick Markdown Cooldown (unless <24h to expiry)"]
-        ESL["ESLBridge.push() -> WebSocket Broadcast (/ws/stream)"]
-    end
-
-    subgraph Replenishment["4. Depletion & Frozen Muse Restock Forecast"]
-        DEP{"SKU Stock Hit 0?<br/>(Sold Out or Expired)"}
-        SNAP["Snapshot Batch Peak, Lifespan, Velocity,<br/>Sold/Wasted & No-Tool Twin Waste"]
-        MUSE_FC["ContextEngine.forecast_restock() via Muse<br/>RESTOCK_PROMPT_TEMPLATE -> QTY & REASON (capped at 5x batch)<br/>(Rule formula fallback offline)"]
-        FREEZE["Freeze Forecast in Depletion Ledger<br/>Display in 'Forecast & restock' Tab"]
-        RST["Admin Clicks Restock -> Replenish Live Shelf + Twin<br/>Clear Depletion Snapshot & Return Card to ESL Wall"]
-    end
-
-    Bootstrap --> CLK
-    CLK --> EXP --> HRS
-    HRS -- "Closed (Overnight)" --> DEP
-    HRS -- "Open" --> POS --> DEP
-    POS --> RET --> MUSE_MOD --> ELAST --> GUARD --> ESL
-    DEP -- "Yes (First Tick at 0)" --> SNAP --> MUSE_FC --> FREEZE --> RST
+    A["1 · Stock — Perishable goods on smart shelf labels, with live weather and local events"] --> B["2 · Sell — Shoppers buy every hour; expiring stock is tracked day and night"]
+    B --> C["3 · Sense — AI reads the situation into a demand signal"]
+    C --> D["4 · Price — Markdowns clear soon-to-expire stock; prices recover when demand surges"]
+    D --> E["5 · Display — New prices appear on the labels instantly, each with its reason"]
+    E --> F["6 · Restock — Empty shelves get a demand forecast; one click refills them"]
 ```
+
+_Behind the scenes, a no-tool twin mirrors the store at static prices, so every dollar of gain is provably from pricing. The [demo video](#demo-video) walks through all six stages live._
 
 ### Step-by-Step Lifecycle
 
